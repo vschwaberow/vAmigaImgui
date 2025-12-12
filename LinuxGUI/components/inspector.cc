@@ -579,13 +579,13 @@ void Inspector::DrawCIA(vamiga::VAmiga& emu) {
                       const std::array<const char*, 8>& labels) {
     ImGui::TextDisabled("%s", title.data());
     ImGui::SameLine();
-    for (int bit : std::views::iota(7, -1)) {
+    for (int bit : std::views::iota(0, 8) | std::views::reverse) {
       const bool set = (value >> bit) & 1;
       ImGui::PushStyleColor(ImGuiCol_Text,
                             set ? ImVec4(0.2f, 0.9f, 0.2f, 1.0f)
                                 : ImVec4(0.5f, 0.5f, 0.5f, 1.0f));
       ImGui::Text("%s %s", set ? ICON_FA_SQUARE_CHECK : ICON_FA_SQUARE,
-                  labels[7 - bit] ? labels[7 - bit] : "");
+                  labels[bit] ? labels[bit] : "");
       ImGui::PopStyleColor();
       if (bit % 2 == 1) ImGui::SameLine();
     }
