@@ -150,8 +150,11 @@ void Inspector::DrawCPU(vamiga::VAmiga& emu) {
     ImGui::BeginChild("Dasm", ImVec2(0, 200), true);
     for ([[maybe_unused]] int i : std::views::iota(0, 12)) {
       std::optional<vamiga::GuardInfo> bp = emu.cpu.breakpoints.guardAt(addr);
+      std::optional<vamiga::GuardInfo> wp = emu.cpu.watchpoints.guardAt(addr);
       bool is_bp_enabled = bp && bp->enabled;
       bool is_bp = bp.has_value();
+      bool is_wp_enabled = wp && wp->enabled;
+      bool is_wp = wp.has_value();
       ImGui::PushID(addr);
       if (is_bp) {
         ImGui::PushStyleColor(ImGuiCol_Button,
@@ -186,8 +189,10 @@ void Inspector::DrawCPU(vamiga::VAmiga& emu) {
       ImGui::SameLine();
       bool is_pc = (addr == cpu.pc0);
       if (is_pc) ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1, 1, 0, 1));
+      if (is_wp) ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.2f, 0.9f, 1.0f, 1.0f));
       std::string instr = emu.cpu.debugger.disassembleInstr(addr, &len);
       ImGui::Text("%08X: %s", addr, instr.c_str());
+      if (is_wp) ImGui::PopStyleColor();
       if (is_pc) ImGui::PopStyleColor();
       ImGui::PopID();
       addr += len;
