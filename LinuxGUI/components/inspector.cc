@@ -535,9 +535,10 @@ void Inspector::DrawEvents(vamiga::VAmiga& emu) {
 }
 void Inspector::DrawWatchpoints(vamiga::VAmiga& emu) {
   if (!ImGui::CollapsingHeader("Watchpoints", ImGuiTreeNodeFlags_DefaultOpen)) return;
-  if (ImGui::BeginTable("WPTable", 3, ImGuiTableFlags_BordersInnerH | ImGuiTableFlags_RowBg)) {
+  if (ImGui::BeginTable("WPTable", 4, ImGuiTableFlags_BordersInnerH | ImGuiTableFlags_RowBg)) {
     ImGui::TableSetupColumn("En", ImGuiTableColumnFlags_WidthFixed, 30);
     ImGui::TableSetupColumn("Address", ImGuiTableColumnFlags_WidthStretch);
+    ImGui::TableSetupColumn("Edit", ImGuiTableColumnFlags_WidthFixed, 40);
     ImGui::TableSetupColumn("Del", ImGuiTableColumnFlags_WidthFixed, 30);
     ImGui::TableHeadersRow();
     int count = emu.cpu.watchpoints.elements();
@@ -554,6 +555,24 @@ void Inspector::DrawWatchpoints(vamiga::VAmiga& emu) {
       ImGui::TableSetColumnIndex(1);
       ImGui::TextColored(ImVec4(0.6f, 0.8f, 1.0f, 1.0f), "%08X", info->addr);
       ImGui::TableSetColumnIndex(2);
+      ImGui::PushItemWidth(-1);
+      ImGui::SetNextItemWidth(-1);
+      static char edit_buf[16] = "";
+      std::snprintf(edit_buf, sizeof(edit_buf), "%08X", info->addr);
+      if (ImGui::InputText("##edit", edit_buf, sizeof(edit_buf),
+                           ImGuiInputTextFlags_CharsHexadecimal |
+                               ImGuiInputTextFlags_EnterReturnsTrue)) {
+        uint32_t new_addr = 0;
+        if (auto [p, ec] =
+                std::from_chars(edit_buf, edit_buf + std::strlen(edit_buf),
+                                new_addr, 16);
+            ec == std::errc()) {
+          if (!emu.cpu.watchpoints.guardAt(new_addr)) {
+            emu.cpu.watchpoints.moveTo(i, new_addr);
+          }
+        }
+      }
+      ImGui::TableSetColumnIndex(3);
       if (ImGui::Button(ICON_FA_TRASH_CAN)) {
         emu.cpu.watchpoints.remove(i);
         ImGui::PopID();
