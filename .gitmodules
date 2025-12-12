@@ -1,0 +1,3 @@
+[submodule "external/vAmiga"]
+	path = external/vAmiga
+	url = https://github.com/dirkwhoffmann/vAmiga
