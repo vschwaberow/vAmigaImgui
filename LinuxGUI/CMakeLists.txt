@@ -86,8 +86,13 @@ target_link_libraries(vAmigaLinux PRIVATE GL dl)
 
 add_executable(vAmigaTests
     tests/smoke_test.cc
+    tests/config_provider_test.cc
 )
 target_link_libraries(vAmigaTests PRIVATE
     gtest_main
+    VACore
+)
+target_include_directories(vAmigaTests PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}
 )
 add_test(NAME vAmigaTests COMMAND vAmigaTests)
