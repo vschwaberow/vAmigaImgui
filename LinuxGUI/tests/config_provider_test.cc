@@ -1,8 +1,10 @@
 #include <gtest/gtest.h>
+#include <memory>
 #include <string>
 
 #include "services/config_provider.h"
 #include "constants.h"
+#include "Infrastructure/Defaults.h"
 
 TEST(ConfigProviderTest, UsesFallbacksWhenUnset) {
   vamiga::Defaults defaults;
