@@ -1,6 +1,7 @@
 #include "components/settings_window.h"
-#include <format>
 #include <array>
+#include <format>
+#include <ranges>
 #include "VAmiga.h"
 #include "constants.h"
 #include "Infrastructure/Option.h"
@@ -29,13 +30,11 @@ template <std::size_t N>
 bool DrawValueCombo(const char* label, int& current_value,
                     const std::array<const char*, N>& labels,
                     const std::array<int, N>& values) {
-  int selected = 0;
-  for (int i = 0; i < static_cast<int>(N); ++i) {
-    if (current_value == values[i]) {
-      selected = i;
-      break;
-    }
-  }
+  const auto it = std::ranges::find(values, current_value);
+  int selected = (it != values.end())
+                     ? static_cast<int>(std::ranges::distance(values.begin(), it))
+                     : 0;
+
   if (ImGui::Combo(label, &selected, labels.data(),
                    static_cast<int>(labels.size()))) {
     current_value = values[selected];
