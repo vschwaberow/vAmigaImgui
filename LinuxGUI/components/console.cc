@@ -5,8 +5,15 @@
 #include <sstream>
 #include <string_view>
 
+#include <SDL.h>
+
 #include "core_actions.h"
 #include "imgui.h"
+
+#ifndef ImGuiFocusedFlags_RootAndChildWindows
+#define ImGuiFocusedFlags_RootAndChildWindows \
+  (ImGuiFocusedFlags_RootWindow | ImGuiFocusedFlags_ChildWindows)
+#endif
 
 namespace gui {
 
