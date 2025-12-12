@@ -3,10 +3,12 @@
 
 #include <filesystem>
 #include <functional>
+#include <ranges>
 #include <string>
 #include <string_view>
 #include <vector>
 #include "imgui.h"
+#include "Infrastructure/Option.h"
 #include "resources/IconsFontAwesome6.h"
 #include <utility>
 #include "VAmigaTypes.h"
@@ -63,13 +65,35 @@ class SettingsWindow {
   void DrawCompatibility(vamiga::VAmiga& emulator);
   void DrawVideo(vamiga::VAmiga& emulator);
   void DrawAudio(vamiga::VAmiga& emulator, const SettingsContext& ctx);
-  void DrawEnumCombo(std::string_view label, vamiga::Opt opt, vamiga::VAmiga& emu);
+  template <vamiga::Opt opt>
+  void DrawEnumCombo(std::string_view label, vamiga::VAmiga& emu);
   void DrawRomInfo(std::string_view label, const vamiga::RomTraits& traits,
                    bool present, std::string* path_buffer,
                    std::function<void()> on_load,
                    std::function<void()> on_eject);
   int current_tab_ = 0;
 };
+}
+
+template <vamiga::Opt opt>
+void gui::SettingsWindow::DrawEnumCombo(std::string_view label, vamiga::VAmiga& emu) {
+  static const auto items = vamiga::OptionParser::pairs(opt);
+  const auto current_val = emu.get(opt);
+
+  const auto preview_it = std::ranges::find_if(
+      items, [current_val](const auto& item) { return item.second == current_val; });
+  std::string_view preview = (preview_it != items.end()) ? preview_it->first : "Unknown";
+
+  if (ImGui::BeginCombo(label.data(), preview.data())) {
+    for (const auto& [name, value] : items) {
+      const bool is_selected = (current_val == value);
+      if (ImGui::Selectable(name.c_str(), is_selected)) {
+        emu.set(opt, value);
+      }
+      if (is_selected) ImGui::SetItemDefaultFocus();
+    }
+    ImGui::EndCombo();
+  }
 }
 
 #endif

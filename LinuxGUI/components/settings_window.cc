@@ -192,7 +192,7 @@ void SettingsWindow::DrawHardware(vamiga::VAmiga& emulator) {
 void SettingsWindow::DrawPerformance(vamiga::VAmiga& emulator) {
   ImGui::Text("Warp Mode");
   ImGui::Separator();
-  DrawEnumCombo("Activation", vamiga::Opt::AMIGA_WARP_MODE, emulator);
+  DrawEnumCombo<vamiga::Opt::AMIGA_WARP_MODE>("Activation", emulator);
   int warp_boot = static_cast<int>(emulator.get(vamiga::Opt::AMIGA_WARP_BOOT));
   if (ImGui::InputInt("Warp Boot (sec)", &warp_boot)) {
       emulator.set(vamiga::Opt::AMIGA_WARP_BOOT, warp_boot);
@@ -265,7 +265,7 @@ void SettingsWindow::DrawCompatibility(vamiga::VAmiga& emulator) {
       emulator.set(vamiga::Opt::DC_SPEED, dc_speed);
   }
   
-  DrawEnumCombo("Mechanics", vamiga::Opt::DRIVE_MECHANICS, emulator);
+  DrawEnumCombo<vamiga::Opt::DRIVE_MECHANICS>("Mechanics", emulator);
   
   bool lock_sync = static_cast<bool>(emulator.get(vamiga::Opt::DC_LOCK_DSKSYNC));
   if (ImGui::Checkbox("Lock DskSync", &lock_sync)) {
@@ -397,34 +397,11 @@ void SettingsWindow::DrawPeripherals(vamiga::VAmiga& emulator, const SettingsCon
   }
 }
 
-void SettingsWindow::DrawEnumCombo(std::string_view label, vamiga::Opt opt, vamiga::VAmiga& emu) {
-    long current_val = emu.get(opt);
-    std::vector<std::pair<std::string, long>> items = vamiga::OptionParser::pairs(opt);
-    
-    std::string preview = "Unknown";
-    for (const auto& item : items) {
-        if (item.second == current_val) {
-            preview = item.first;
-            break;
-        }
-    }
-    
-    if (ImGui::BeginCombo(label.data(), preview.c_str())) {
-        for (const auto& item : items) {
-            bool is_selected = (current_val == item.second);
-            if (ImGui::Selectable(item.first.c_str(), is_selected)) {
-                emu.set(opt, item.second);
-            }
-            if (is_selected) ImGui::SetItemDefaultFocus();
-        }
-        ImGui::EndCombo();
-    }
-}
 
 void SettingsWindow::DrawVideo(vamiga::VAmiga& emulator) {
   ImGui::Text("Color");
   ImGui::Separator();
-  DrawEnumCombo("Palette", vamiga::Opt::MON_PALETTE, emulator);
+  DrawEnumCombo<vamiga::Opt::MON_PALETTE>("Palette", emulator);
   
   int brightness = static_cast<int>(emulator.get(vamiga::Opt::MON_BRIGHTNESS));
   if (ImGui::SliderInt("Brightness", &brightness, -100, 100, "%d%%")) {
@@ -442,14 +419,14 @@ void SettingsWindow::DrawVideo(vamiga::VAmiga& emulator) {
   ImGui::Spacing();
   ImGui::Text("Geometry");
   ImGui::Separator();
-  DrawEnumCombo("Zoom Mode", vamiga::Opt::MON_ZOOM, emulator);
-  DrawEnumCombo("Centering", vamiga::Opt::MON_CENTER, emulator);
+  DrawEnumCombo<vamiga::Opt::MON_ZOOM>("Zoom Mode", emulator);
+  DrawEnumCombo<vamiga::Opt::MON_CENTER>("Centering", emulator);
   
   ImGui::Spacing();
   ImGui::Text("CRT Effects");
   ImGui::Separator();
   
-  DrawEnumCombo("Scanlines", vamiga::Opt::MON_SCANLINES, emulator);
+  DrawEnumCombo<vamiga::Opt::MON_SCANLINES>("Scanlines", emulator);
   int scanlines = static_cast<int>(emulator.get(vamiga::Opt::MON_SCANLINES));
   if (scanlines > 0) {
       int scan_weight = static_cast<int>(emulator.get(vamiga::Opt::MON_SCANLINE_WEIGHT));
@@ -458,7 +435,7 @@ void SettingsWindow::DrawVideo(vamiga::VAmiga& emulator) {
       }
   }
   
-  DrawEnumCombo("Dotmask", vamiga::Opt::MON_DOTMASK, emulator);
+  DrawEnumCombo<vamiga::Opt::MON_DOTMASK>("Dotmask", emulator);
   
   bool blur = static_cast<bool>(emulator.get(vamiga::Opt::MON_BLUR));
   if (ImGui::Checkbox("Blur", &blur)) {
@@ -482,8 +459,8 @@ void SettingsWindow::DrawVideo(vamiga::VAmiga& emulator) {
       }
   }
   
-  DrawEnumCombo("Enhancer", vamiga::Opt::MON_ENHANCER, emulator);
-  DrawEnumCombo("Upscaler", vamiga::Opt::MON_UPSCALER, emulator);
+  DrawEnumCombo<vamiga::Opt::MON_ENHANCER>("Enhancer", emulator);
+  DrawEnumCombo<vamiga::Opt::MON_UPSCALER>("Upscaler", emulator);
   
   bool flicker = static_cast<bool>(emulator.get(vamiga::Opt::MON_FLICKER));
   if (ImGui::Checkbox("Interlace Flicker", &flicker)) {
