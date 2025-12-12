@@ -1,5 +1,6 @@
 #include "application.h"
 #include <SDL_opengl.h>
+#include <array>
 #include <format>
 #include <print>
 #include <ranges>
@@ -20,6 +21,32 @@
 #include "imgui.h"
 #include "resources/IconsFontAwesome6.h"
 #include "resources/font_awesome.h"
+
+namespace {
+struct DeviceDescriptor {
+  std::string_view icon;
+  std::string_view label;
+};
+
+constexpr auto kDeviceDescriptors = std::to_array<DeviceDescriptor>({
+    DeviceDescriptor{ICON_FA_BAN, "None"},
+    DeviceDescriptor{ICON_FA_COMPUTER_MOUSE, "Mouse"},
+    DeviceDescriptor{ICON_FA_KEYBOARD, "Keyset 1"},
+    DeviceDescriptor{ICON_FA_KEYBOARD, "Keyset 2"},
+    DeviceDescriptor{ICON_FA_GAMEPAD, "Gamepad 1"},
+    DeviceDescriptor{ICON_FA_GAMEPAD, "Gamepad 2"},
+    DeviceDescriptor{ICON_FA_GAMEPAD, "Gamepad 3"},
+    DeviceDescriptor{ICON_FA_GAMEPAD, "Gamepad 4"},
+});
+
+constexpr DeviceDescriptor GetDeviceDescriptor(int device_id) {
+  if (device_id >= 0 &&
+      device_id < static_cast<int>(kDeviceDescriptors.size())) {
+    return kDeviceDescriptors[device_id];
+  }
+  return {ICON_FA_QUESTION, "Unknown"};
+}
+}  // namespace
 Application::Application(int argc, char** argv)
     : gl_context_(nullptr, SDL_GL_DeleteContext) {}
 Application::~Application() {
@@ -569,18 +596,20 @@ void Application::DrawToolbar() {
   ImGui::SameLine(0, 20.0f);
   ImGui::BeginGroup();
   ImGui::PushID("Port1Btn");
-  if (ImGui::Button(GetDeviceIcon(port1_device_).data())) {
+  const auto port1_desc = GetDeviceDescriptor(port1_device_);
+  if (ImGui::Button(port1_desc.icon.data())) {
     ImGui::OpenPopup("Port1Menu");
   }
-  ImGui::SetItemTooltip(std::format("Port 1: {}", InputManager::GetDeviceName(port1_device_)).c_str());
+  ImGui::SetItemTooltip(std::format("Port 1: {}", port1_desc.label).c_str());
   ImGui::PopID();
   DrawPortDeviceSelection(0, &port1_device_);
   ImGui::SameLine();
   ImGui::PushID("Port2Btn");
-  if (ImGui::Button(GetDeviceIcon(port2_device_).data())) {
+  const auto port2_desc = GetDeviceDescriptor(port2_device_);
+  if (ImGui::Button(port2_desc.icon.data())) {
     ImGui::OpenPopup("Port2Menu");
   }
-  ImGui::SetItemTooltip(std::format("Port 2: {}", InputManager::GetDeviceName(port2_device_)).c_str());
+  ImGui::SetItemTooltip(std::format("Port 2: {}", port2_desc.label).c_str());
   ImGui::PopID();
   DrawPortDeviceSelection(1, &port2_device_);
   ImGui::EndGroup();
@@ -606,24 +635,14 @@ void Application::DrawToolbar() {
   ImGui::End();
 }
 std::string_view Application::GetDeviceIcon(int device_id) {
-    switch (device_id) {
-        case 0: return ICON_FA_BAN;
-        case 1: return ICON_FA_COMPUTER_MOUSE;
-        case 2:
-        case 3: return ICON_FA_KEYBOARD;
-        case 4:
-        case 5:
-        case 6:
-        case 7: return ICON_FA_GAMEPAD;
-        default: return ICON_FA_QUESTION;
-    }
+    return GetDeviceDescriptor(device_id).icon;
 }
 void Application::DrawPortDeviceSelection(int port_idx, int* device_id) {
     std::string popup_id = std::format("Port{}Menu", port_idx + 1);
     if (ImGui::BeginPopup(popup_id.c_str())) {
-        static constexpr std::array devices = {"None", "Mouse", "Keyset 1", "Keyset 2", "Gamepad 1", "Gamepad 2", "Gamepad 3", "Gamepad 4"};
-        for (int i : std::views::iota(0, (int)devices.size())) {
-            std::string label = std::format("{} {}", GetDeviceIcon(i), devices[i]);
+        for (int i : std::views::iota(0, static_cast<int>(kDeviceDescriptors.size()))) {
+            const auto desc = GetDeviceDescriptor(i);
+            std::string label = std::format("{} {}", desc.icon, desc.label);
             if (ImGui::Selectable(label.c_str(), *device_id == i)) {
                 *device_id = i;
                 input_manager_->SetPortDevices(port1_device_, port2_device_);
