@@ -613,7 +613,7 @@ void Inspector::DrawCIA(vamiga::VAmiga& emu) {
   ImGui::Separator();
   ImGui::Text("Timers");
   if (ImGui::BeginTable("CIATimers", 2, ImGuiTableFlags_BordersInnerV)) {
-    auto timer_row = [](const char* name, const vamiga::CIATimerInfo& t) {
+    auto timer_row = [this](const char* name, const vamiga::CIATimerInfo& t) {
       ImGui::Text("%s", name);
       DrawRegister("COUNT", t.count, 16);
       DrawRegister("LATCH", t.latch, 16);
