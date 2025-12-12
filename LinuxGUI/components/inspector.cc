@@ -635,14 +635,14 @@ void Inspector::DrawCopperBreakpoints(vamiga::VAmiga& emu) {
         emu.copperBreakpoints.toggle(i);
       }
       if (ImGui::IsItemClicked(ImGuiMouseButton_Left)) {
-        inspector::Inspector::Instance().SetDasmAddress(info->addr);
+        Inspector::Instance().SetDasmAddress(info->addr);
       }
       ImGui::TableSetColumnIndex(1);
       if (ImGui::Selectable(
               std::format("{:08X}", info->addr).c_str(), false,
               ImGuiSelectableFlags_SpanAllColumns |
                   ImGuiSelectableFlags_AllowDoubleClick)) {
-        inspector::Inspector::Instance().SetDasmAddress(info->addr);
+        Inspector::Instance().SetDasmAddress(info->addr);
       }
       ImGui::TableSetColumnIndex(2);
       ImGui::PushItemWidth(-1);
