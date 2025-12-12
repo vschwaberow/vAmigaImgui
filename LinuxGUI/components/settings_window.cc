@@ -168,6 +168,27 @@ void SettingsWindow::DrawGeneral(vamiga::VAmiga& emulator, const SettingsContext
       ImGui::Checkbox("Pause in background", ctx.pause_in_background);
   }
 }
+
+template <vamiga::Opt opt>
+void SettingsWindow::DrawEnumCombo(std::string_view label, vamiga::VAmiga& emu) {
+  static const auto items = vamiga::OptionParser::pairs(opt);
+  const auto current_val = emu.get(opt);
+
+  const auto preview_it = std::ranges::find_if(
+      items, [current_val](const auto& item) { return item.second == current_val; });
+  std::string_view preview = (preview_it != items.end()) ? preview_it->first : "Unknown";
+
+  if (ImGui::BeginCombo(label.data(), preview.data())) {
+    for (const auto& [name, value] : items) {
+      const bool is_selected = (current_val == value);
+      if (ImGui::Selectable(name.c_str(), is_selected)) {
+        emu.set(opt, value);
+      }
+      if (is_selected) ImGui::SetItemDefaultFocus();
+    }
+    ImGui::EndCombo();
+  }
+}
 void SettingsWindow::DrawInputs(vamiga::VAmiga& emulator, const SettingsContext& ctx) {
   ImGui::Text("Input Settings");
   ImGui::Separator();
@@ -520,6 +541,27 @@ void SettingsWindow::DrawVideo(vamiga::VAmiga& emulator) {
       }
   }
 }
+
+// Explicit instantiations for the enum combos we use.
+template void SettingsWindow::DrawEnumCombo<vamiga::Opt::AMIGA_WARP_MODE>(
+    std::string_view, vamiga::VAmiga&);
+template void SettingsWindow::DrawEnumCombo<vamiga::Opt::DRIVE_MECHANICS>(
+    std::string_view, vamiga::VAmiga&);
+template void SettingsWindow::DrawEnumCombo<vamiga::Opt::MON_PALETTE>(
+    std::string_view, vamiga::VAmiga&);
+template void SettingsWindow::DrawEnumCombo<vamiga::Opt::MON_ZOOM>(
+    std::string_view, vamiga::VAmiga&);
+template void SettingsWindow::DrawEnumCombo<vamiga::Opt::MON_CENTER>(
+    std::string_view, vamiga::VAmiga&);
+template void SettingsWindow::DrawEnumCombo<vamiga::Opt::MON_SCANLINES>(
+    std::string_view, vamiga::VAmiga&);
+template void SettingsWindow::DrawEnumCombo<vamiga::Opt::MON_DOTMASK>(
+    std::string_view, vamiga::VAmiga&);
+template void SettingsWindow::DrawEnumCombo<vamiga::Opt::MON_ENHANCER>(
+    std::string_view, vamiga::VAmiga&);
+template void SettingsWindow::DrawEnumCombo<vamiga::Opt::MON_UPSCALER>(
+    std::string_view, vamiga::VAmiga&);
+
 void SettingsWindow::DrawAudio(vamiga::VAmiga& emulator, const SettingsContext& ctx) {
   ImGui::Text("Audio Settings");
   ImGui::Separator();
