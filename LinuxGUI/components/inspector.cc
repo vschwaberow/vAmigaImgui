@@ -572,8 +572,11 @@ void Inspector::DrawWatchpoints(vamiga::VAmiga& emu) {
       uint32_t addr = 0;
       std::from_chars(buf, buf + 16, addr, 16);
       if (addr > 0 || buf[0] == '0') {
-         emu.cpu.watchpoints.setAt(addr);
-         buf[0] = 0;
+        auto existing = emu.cpu.watchpoints.guardAt(addr);
+        if (!existing) {
+          emu.cpu.watchpoints.setAt(addr);
+        }
+        buf[0] = 0;
       }
     }
     ImGui::TableSetColumnIndex(2);
