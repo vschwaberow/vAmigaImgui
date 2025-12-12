@@ -23,6 +23,27 @@ inline bool InputText(const char* label, std::string* str,
       str);
 }
 }
+
+namespace {
+template <std::size_t N>
+bool DrawValueCombo(const char* label, int& current_value,
+                    const std::array<const char*, N>& labels,
+                    const std::array<int, N>& values) {
+  int selected = 0;
+  for (int i = 0; i < static_cast<int>(N); ++i) {
+    if (current_value == values[i]) {
+      selected = i;
+      break;
+    }
+  }
+  if (ImGui::Combo(label, &selected, labels.data(),
+                   static_cast<int>(labels.size()))) {
+    current_value = values[selected];
+    return true;
+  }
+  return false;
+}
+}  // namespace
 namespace gui {
 void SettingsWindow::Draw(bool* p_open, vamiga::VAmiga& emulator,
                           const SettingsContext& ctx) {
@@ -158,28 +179,22 @@ void SettingsWindow::DrawHardware(vamiga::VAmiga& emulator) {
   ImGui::Text("Memory");
   ImGui::Separator();
   int chip_ram = static_cast<int>(emulator.get(vamiga::Opt::MEM_CHIP_RAM));
-  static constexpr std::array chip_items = { "512 KB", "1 MB", "2 MB" };
-  int chip_values[] = { 512, 1024, 2048 };
-  int current_chip = 0;
-  for (int i = 0; i < 3; ++i) if (chip_ram == chip_values[i]) current_chip = i;
-  if (ImGui::Combo("Chip RAM", &current_chip, chip_items.data(), chip_items.size())) {
-    emulator.set(vamiga::Opt::MEM_CHIP_RAM, chip_values[current_chip]);
+  static constexpr auto chip_items = std::to_array<const char*>({"512 KB", "1 MB", "2 MB"});
+  static constexpr auto chip_values = std::to_array<int>({512, 1024, 2048});
+  if (DrawValueCombo("Chip RAM", chip_ram, chip_items, chip_values)) {
+    emulator.set(vamiga::Opt::MEM_CHIP_RAM, chip_ram);
   }
   int slow_ram = static_cast<int>(emulator.get(vamiga::Opt::MEM_SLOW_RAM));
-  static constexpr std::array slow_items = { "None", "512 KB", "1 MB", "1.5 MB" };
-  int slow_values[] = { 0, 512, 1024, 1536 };
-  int current_slow = 0;
-  for (int i = 0; i < 4; ++i) if (slow_ram == slow_values[i]) current_slow = i;
-  if (ImGui::Combo("Slow RAM", &current_slow, slow_items.data(), slow_items.size())) {
-    emulator.set(vamiga::Opt::MEM_SLOW_RAM, slow_values[current_slow]);
+  static constexpr auto slow_items = std::to_array<const char*>({"None", "512 KB", "1 MB", "1.5 MB"});
+  static constexpr auto slow_values = std::to_array<int>({0, 512, 1024, 1536});
+  if (DrawValueCombo("Slow RAM", slow_ram, slow_items, slow_values)) {
+    emulator.set(vamiga::Opt::MEM_SLOW_RAM, slow_ram);
   }
   int fast_ram = static_cast<int>(emulator.get(vamiga::Opt::MEM_FAST_RAM));
-  static constexpr std::array fast_items = { "None", "512 KB", "1 MB", "2 MB", "4 MB", "8 MB" };
-  int fast_values[] = { 0, 512, 1024, 2048, 4096, 8192 };
-  int current_fast = 0;
-  for (int i = 0; i < 6; ++i) if (fast_ram == fast_values[i]) current_fast = i;
-  if (ImGui::Combo("Fast RAM", &current_fast, fast_items.data(), fast_items.size())) {
-    emulator.set(vamiga::Opt::MEM_FAST_RAM, fast_values[current_fast]);
+  static constexpr auto fast_items = std::to_array<const char*>({"None", "512 KB", "1 MB", "2 MB", "4 MB", "8 MB"});
+  static constexpr auto fast_values = std::to_array<int>({0, 512, 1024, 2048, 4096, 8192});
+  if (DrawValueCombo("Fast RAM", fast_ram, fast_items, fast_values)) {
+    emulator.set(vamiga::Opt::MEM_FAST_RAM, fast_ram);
   }
   ImGui::Spacing();
   if (ImGui::Button("Hard Reset Machine")) {
