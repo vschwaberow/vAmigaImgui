@@ -429,18 +429,12 @@ void Inspector::DrawSprite(const vamiga::SpriteInfo& info, int id) {
 }
 
 void Inspector::DrawPaula(vamiga::VAmiga& emu) {
-  const bool running = emu.isRunning();
-  auto paula = running ? emu.paula.getCachedInfo() : emu.paula.getInfo();
-  auto dc = running ? emu.paula.diskController.getCachedInfo()
-                    : emu.paula.diskController.getInfo();
-  auto audio0 = running ? emu.paula.audioChannel0.getCachedInfo()
-                        : emu.paula.audioChannel0.getInfo();
-  auto audio1 = running ? emu.paula.audioChannel1.getCachedInfo()
-                        : emu.paula.audioChannel1.getInfo();
-  auto audio2 = running ? emu.paula.audioChannel2.getCachedInfo()
-                        : emu.paula.audioChannel2.getInfo();
-  auto audio3 = running ? emu.paula.audioChannel3.getCachedInfo()
-                        : emu.paula.audioChannel3.getInfo();
+  auto paula = emu.paula.getInfo();
+  auto dc = emu.paula.diskController.getInfo();
+  auto audio0 = emu.paula.audioChannel0.getInfo();
+  auto audio1 = emu.paula.audioChannel1.getInfo();
+  auto audio2 = emu.paula.audioChannel2.getInfo();
+  auto audio3 = emu.paula.audioChannel3.getInfo();
 
   static constexpr std::array<const char*, 16> irq_names = {
       nullptr,    nullptr,     "TBE",    "DSKBLK", "SOFT", "PORTS",
