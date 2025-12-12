@@ -36,6 +36,9 @@ class Inspector {
  public:
   void SetDasmAddress(int addr) { dasm_addr_ = addr; follow_pc_ = false; }
  private:
+  void DrawCopperList(int list_idx, bool symbolic, int extra_rows,
+                      const vamiga::CopperInfo& info, vamiga::VAmiga& emu);
+
   int dasm_addr_ = 0;
   bool follow_pc_ = true;
   int mem_addr_ = 0;
@@ -43,6 +46,8 @@ class Inspector {
   char mem_search_buf_[16] = "";
   bool hex_mode_ = true;
   int selected_cia_ = 0;
+  bool copper_symbolic_[2] = {true, true};
+  int copper_extra_rows_[2] = {0, 0};
 };
 }
 #endif

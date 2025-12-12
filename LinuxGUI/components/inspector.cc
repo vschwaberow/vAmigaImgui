@@ -657,17 +657,48 @@ void Inspector::DrawCIA(vamiga::VAmiga& emu) {
   DrawRegister("SSR", cia_info.ssr, 8);
 }
 void Inspector::DrawCopper(vamiga::VAmiga& emu) {
-  auto info = emu.agnus.getInfo();
-  DrawRegister("COPPC", info.coppc0);
-  ImGui::Separator();
-  ImGui::BeginChild("CopperList");
-  uint32_t addr = info.coppc0;
-  for ([[maybe_unused]] int i : std::views::iota(0, 16)) {
-    std::string dis = emu.agnus.copper.disassemble(addr, true);
-    ImGui::Text("%08X: %s", addr, dis.c_str());
-    addr += 4;
+  auto info = emu.agnus.copper.getInfo();
+  if (ImGui::BeginTable("CopperRegs", 2, ImGuiTableFlags_BordersInnerV)) {
+    ImGui::TableNextRow();
+    ImGui::TableSetColumnIndex(0);
+    DrawRegister("COP1LC", info.cop1lc, 24);
+    DrawRegister("COP1INS", info.cop1ins, 16);
+    DrawRegister("COPPC", info.coppc0, 24);
+    ImGui::TableSetColumnIndex(1);
+    DrawRegister("COP2LC", info.cop2lc, 24);
+    DrawRegister("COP2INS", info.cop2ins, 16);
+    DrawBit("CDANG", info.cdang);
+    ImGui::EndTable();
   }
-  ImGui::EndChild();
+
+  ImGui::Separator();
+  ImGui::Text("Lists");
+  ImGui::Checkbox("Symbolic L1", &copper_symbolic_[0]);
+  ImGui::SameLine();
+  ImGui::Checkbox("Symbolic L2", &copper_symbolic_[1]);
+  ImGui::SameLine();
+  if (ImGui::Button("Find PC")) {
+    SetDasmAddress(static_cast<int>(info.coppc0));
+  }
+
+  ImGui::SameLine();
+  ImGui::TextDisabled("Extra rows: L1 %d  L2 %d", copper_extra_rows_[0],
+                      copper_extra_rows_[1]);
+  if (ImGui::Button("L1 +")) copper_extra_rows_[0]++;
+  ImGui::SameLine();
+  if (ImGui::Button("L1 -")) copper_extra_rows_[0] = std::max(0, copper_extra_rows_[0] - 1);
+  ImGui::SameLine();
+  if (ImGui::Button("L2 +")) copper_extra_rows_[1]++;
+  ImGui::SameLine();
+  if (ImGui::Button("L2 -")) copper_extra_rows_[1] = std::max(0, copper_extra_rows_[1] - 1);
+
+  ImGui::Separator();
+  ImGui::Text("List 1");
+  DrawCopperList(1, copper_symbolic_[0], copper_extra_rows_[0], info, emu);
+  ImGui::Separator();
+  ImGui::Text("List 2");
+  DrawCopperList(2, copper_symbolic_[1], copper_extra_rows_[1], info, emu);
+
   DrawCopperBreakpoints(emu);
 }
 void Inspector::DrawBlitter(vamiga::VAmiga& emu) {
@@ -790,6 +821,75 @@ void Inspector::DrawWatchpoints(vamiga::VAmiga& emu) {
     ImGui::TableSetColumnIndex(2);
     ImGui::EndTable();
   }
+}
+
+void Inspector::DrawCopperList(int list_idx, bool symbolic, int extra_rows,
+                               const vamiga::CopperInfo& info,
+                               vamiga::VAmiga& emu) {
+  uint32_t start = (list_idx == 1) ? info.copList1Start : info.copList2Start;
+  uint32_t end = (list_idx == 1) ? info.copList1End : info.copList2End;
+  if (end < start) std::swap(start, end);
+  int native_len = static_cast<int>(std::min<uint32_t>((end - start) / 4, 500));
+  int total_rows = std::max(0, native_len + extra_rows);
+  ImGui::BeginChild(
+      std::format("CopperList{}Child", list_idx).c_str(),
+      ImVec2(0, 220), true,
+      ImGuiWindowFlags_HorizontalScrollbar | ImGuiWindowFlags_NavFlattened);
+  ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(6, 2));
+  bool scrolled_to_pc = false;
+  for (int i : std::views::iota(0, total_rows)) {
+    uint32_t addr = start + static_cast<uint32_t>(i * 4);
+    auto bp = emu.copperBreakpoints.guardAt(addr);
+    bool is_bp = bp.has_value();
+    bool bp_enabled = bp && bp->enabled;
+    bool illegal = emu.agnus.copper.isIllegalInstr(addr);
+    bool is_pc = (addr == info.coppc0);
+
+    ImGui::PushID(static_cast<int>(addr));
+    if (is_bp) {
+      ImGui::PushStyleColor(ImGuiCol_Button,
+                            bp_enabled ? ImVec4(0.8f, 0.2f, 0.2f, 1.0f)
+                                       : ImVec4(0.5f, 0.5f, 0.5f, 1.0f));
+      ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
+                            bp_enabled ? ImVec4(1.0f, 0.3f, 0.3f, 1.0f)
+                                       : ImVec4(0.7f, 0.7f, 0.7f, 1.0f));
+      ImGui::PushStyleColor(ImGuiCol_ButtonActive,
+                            bp_enabled ? ImVec4(0.8f, 0.2f, 0.2f, 1.0f)
+                                       : ImVec4(0.5f, 0.5f, 0.5f, 1.0f));
+    }
+    if (ImGui::SmallButton(is_bp ? ICON_FA_CIRCLE : ICON_FA_CIRCLE_DOT)) {
+      if (!is_bp) {
+        emu.copperBreakpoints.setAt(addr);
+      } else if (bp_enabled) {
+        emu.copperBreakpoints.disableAt(addr);
+      } else {
+        emu.copperBreakpoints.enableAt(addr);
+      }
+    }
+    if (is_bp && ImGui::IsItemClicked(ImGuiMouseButton_Right)) {
+      emu.copperBreakpoints.removeAt(addr);
+    }
+    if (is_bp) ImGui::PopStyleColor(3);
+    ImGui::SameLine();
+
+    if (is_pc) ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1, 1, 0, 1));
+    if (illegal) ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1, 0.3f, 0.3f, 1));
+
+    std::string dis = emu.agnus.copper.disassemble(addr, symbolic);
+    ImGui::Text("%08X: %s", addr, dis.c_str());
+
+    if (illegal) ImGui::PopStyleColor();
+    if (is_pc) {
+      ImGui::PopStyleColor();
+      if (!scrolled_to_pc) {
+        ImGui::SetScrollHereY();
+        scrolled_to_pc = true;
+      }
+    }
+    ImGui::PopID();
+  }
+  ImGui::PopStyleVar();
+  ImGui::EndChild();
 }
 
 void Inspector::DrawCopperBreakpoints(vamiga::VAmiga& emu) {
