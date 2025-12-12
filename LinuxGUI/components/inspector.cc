@@ -447,7 +447,7 @@ void Inspector::DrawPaula(vamiga::VAmiga& emu) {
       "COPER",    "VERTB",     "BLIT",   "AUD0",   "AUD1", "AUD2",
       "AUD3",     "RBF",       "DSKSYN", "EXTER"};
 
-  auto bit_row = [](std::string_view label, u16 value,
+  auto bit_row = [](std::string_view label, uint16_t value,
                     const std::array<const char*, 16>& names) {
     ImGui::TextDisabled("%s", label.data());
     ImGui::SameLine();
@@ -471,7 +471,7 @@ void Inspector::DrawPaula(vamiga::VAmiga& emu) {
   ImGui::Separator();
   ImGui::Text("ADKCON");
   ImGui::BeginGroup();
-  auto adk_bit = [&](const char* name, u16 mask) {
+  auto adk_bit = [&](const char* name, uint16_t mask) {
     const bool set = (paula.adkcon & mask) != 0;
     ImGui::Text("%s %s", set ? ICON_FA_SQUARE_CHECK : ICON_FA_SQUARE, name);
   };
