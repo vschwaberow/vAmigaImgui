@@ -1,5 +1,6 @@
 #include "inspector.h"
 #include "logic_analyzer.h"
+#include <algorithm>
 #include <charconv>
 #include <cstdio>
 #include <format>
@@ -553,12 +554,22 @@ void Inspector::DrawWatchpoints(vamiga::VAmiga& emu) {
         emu.cpu.watchpoints.toggle(i);
       }
       ImGui::TableSetColumnIndex(1);
-      ImGui::TextColored(ImVec4(0.6f, 0.8f, 1.0f, 1.0f), "%08X", info->addr);
+      if (ImGui::Selectable(
+              std::format("{:08X}", info->addr).c_str(), false,
+              ImGuiSelectableFlags_SpanAllColumns |
+                  ImGuiSelectableFlags_AllowDoubleClick)) {
+        SetDasmAddress(static_cast<int>(info->addr));
+      }
       ImGui::TableSetColumnIndex(2);
       ImGui::PushItemWidth(-1);
       ImGui::SetNextItemWidth(-1);
       static char edit_buf[16] = "";
-      std::snprintf(edit_buf, sizeof(edit_buf), "%08X", info->addr);
+      {
+        std::string formatted = std::format("{:08X}", info->addr);
+        const auto len = std::min(formatted.size(), sizeof(edit_buf) - 1);
+        std::copy_n(formatted.data(), len, edit_buf);
+        edit_buf[len] = '\0';
+      }
       if (ImGui::InputText("##edit", edit_buf, sizeof(edit_buf),
                            ImGuiInputTextFlags_CharsHexadecimal |
                                ImGuiInputTextFlags_EnterReturnsTrue)) {
@@ -606,9 +617,10 @@ void Inspector::DrawWatchpoints(vamiga::VAmiga& emu) {
 void Inspector::DrawCopperBreakpoints(vamiga::VAmiga& emu) {
     ImGui::Separator();
     ImGui::Text("Copper Breakpoints");
-    if (ImGui::BeginTable("CopBPTable", 3, ImGuiTableFlags_BordersInnerH | ImGuiTableFlags_RowBg)) {
+    if (ImGui::BeginTable("CopBPTable", 4, ImGuiTableFlags_BordersInnerH | ImGuiTableFlags_RowBg)) {
     ImGui::TableSetupColumn("En", ImGuiTableColumnFlags_WidthFixed, 30);
     ImGui::TableSetupColumn("Address", ImGuiTableColumnFlags_WidthStretch);
+    ImGui::TableSetupColumn("Edit", ImGuiTableColumnFlags_WidthFixed, 40);
     ImGui::TableSetupColumn("Del", ImGuiTableColumnFlags_WidthFixed, 30);
     ImGui::TableHeadersRow();
     int count = emu.copperBreakpoints.elements();
@@ -633,6 +645,31 @@ void Inspector::DrawCopperBreakpoints(vamiga::VAmiga& emu) {
         inspector::Inspector::Instance().SetDasmAddress(info->addr);
       }
       ImGui::TableSetColumnIndex(2);
+      ImGui::PushItemWidth(-1);
+      ImGui::SetNextItemWidth(-1);
+      static char cop_edit_buf[16] = "";
+      {
+        std::string formatted = std::format("{:08X}", info->addr);
+        const auto len =
+            std::min(formatted.size(), sizeof(cop_edit_buf) - 1);
+        std::copy_n(formatted.data(), len, cop_edit_buf);
+        cop_edit_buf[len] = '\0';
+      }
+      if (ImGui::InputText("##cop_edit", cop_edit_buf, sizeof(cop_edit_buf),
+                           ImGuiInputTextFlags_CharsHexadecimal |
+                               ImGuiInputTextFlags_EnterReturnsTrue)) {
+        uint32_t new_addr = 0;
+        if (auto [p, ec] =
+                std::from_chars(cop_edit_buf,
+                                cop_edit_buf + std::strlen(cop_edit_buf),
+                                new_addr, 16);
+            ec == std::errc()) {
+          if (!emu.copperBreakpoints.guardAt(new_addr)) {
+            emu.copperBreakpoints.moveTo(i, new_addr);
+          }
+        }
+      }
+      ImGui::TableSetColumnIndex(3);
       if (ImGui::Button(ICON_FA_TRASH_CAN)) {
         emu.copperBreakpoints.remove(i);
         ImGui::PopID();
