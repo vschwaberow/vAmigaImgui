@@ -87,6 +87,7 @@ target_link_libraries(vAmigaLinux PRIVATE GL dl)
 add_executable(vAmigaTests
     tests/smoke_test.cc
     tests/config_provider_test.cc
+    services/config_provider.cc
 )
 target_link_libraries(vAmigaTests PRIVATE
     gtest_main
