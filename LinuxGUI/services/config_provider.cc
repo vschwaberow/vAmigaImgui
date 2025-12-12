@@ -18,9 +18,12 @@ ConfigProvider::ConfigProvider(vamiga::DefaultsAPI& defaults_api)
   
   for (int i : std::views::iota(0, gui::kFloppyDriveCount)) {
     defaults_.setFallback(std::format("DF{}Path", i), "");
+    // Legacy key (with literal braces) to avoid warnings on old configs.
+    defaults_.setFallback("DF{}Path", "");
   }
   for (int i : std::views::iota(0, gui::kHardDriveCount)) {
     defaults_.setFallback(std::format("HD{}Path", i), "");
+    defaults_.setFallback("HD{}Path", "");
   }
   
   defaults_.setFallback(std::string(ConfigKeys::kPauseBg), std::to_string(Defaults::kPauseInBackground));
@@ -83,6 +86,27 @@ void ConfigProvider::Load() {
     std::filesystem::path path = GetConfigPath();
     if (std::filesystem::exists(path)) {
       defaults_.load(path);
+      // Migrate legacy keys "DF{}Path"/"HD{}Path" to per-drive entries.
+      for (int i : std::views::iota(0, gui::kFloppyDriveCount)) {
+        const std::string legacy_key = "DF{}Path";
+        try {
+          std::string legacy_val = defaults_.getRaw(legacy_key);
+          if (!legacy_val.empty()) {
+            defaults_.set(std::format("DF{}Path", i), legacy_val);
+          }
+        } catch (...) {
+        }
+      }
+      for (int i : std::views::iota(0, gui::kHardDriveCount)) {
+        const std::string legacy_key = "HD{}Path";
+        try {
+          std::string legacy_val = defaults_.getRaw(legacy_key);
+          if (!legacy_val.empty()) {
+            defaults_.set(std::format("HD{}Path", i), legacy_val);
+          }
+        } catch (...) {
+        }
+      }
     }
   } catch (const std::exception& e) {
     std::cerr << std::format("Config Load Error: {{}}\n", e.what());
