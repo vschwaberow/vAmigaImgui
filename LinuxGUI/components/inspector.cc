@@ -214,13 +214,20 @@ void Inspector::DrawBreakpoints(vamiga::VAmiga& emu) {
       bool enabled = info->enabled;
       if (ImGui::Checkbox("##en", &enabled)) {
         emu.cpu.breakpoints.toggle(i);
+        SetDasmAddress(static_cast<int>(info->addr));
       }
       ImGui::TableSetColumnIndex(1);
-      ImGui::TextColored(ImVec4(0.6f, 0.8f, 1.0f, 1.0f), "%08X", info->addr);
+      if (ImGui::Selectable(
+              std::format("{:08X}", info->addr).c_str(), false,
+              ImGuiSelectableFlags_SpanAllColumns |
+                  ImGuiSelectableFlags_AllowDoubleClick)) {
+        SetDasmAddress(static_cast<int>(info->addr));
+      }
       ImGui::TableSetColumnIndex(2);
       if (ImGui::Button(ICON_FA_TRASH_CAN)) {
         emu.cpu.breakpoints.remove(i);
         ImGui::PopID();
+        SetDasmAddress(static_cast<int>(info->addr));
         break; 
       }
       ImGui::PopID();
@@ -552,6 +559,7 @@ void Inspector::DrawWatchpoints(vamiga::VAmiga& emu) {
       bool enabled = info->enabled;
       if (ImGui::Checkbox("##en", &enabled)) {
         emu.cpu.watchpoints.toggle(i);
+        SetDasmAddress(static_cast<int>(info->addr));
       }
       ImGui::TableSetColumnIndex(1);
       if (ImGui::Selectable(
@@ -580,6 +588,7 @@ void Inspector::DrawWatchpoints(vamiga::VAmiga& emu) {
             ec == std::errc()) {
           if (!emu.cpu.watchpoints.guardAt(new_addr)) {
             emu.cpu.watchpoints.moveTo(i, new_addr);
+            SetDasmAddress(static_cast<int>(new_addr));
           }
         }
       }
@@ -587,6 +596,7 @@ void Inspector::DrawWatchpoints(vamiga::VAmiga& emu) {
       if (ImGui::Button(ICON_FA_TRASH_CAN)) {
         emu.cpu.watchpoints.remove(i);
         ImGui::PopID();
+        SetDasmAddress(static_cast<int>(info->addr));
         break; 
       }
       ImGui::PopID();
@@ -633,6 +643,7 @@ void Inspector::DrawCopperBreakpoints(vamiga::VAmiga& emu) {
       bool enabled = info->enabled;
       if (ImGui::Checkbox("##en", &enabled)) {
         emu.copperBreakpoints.toggle(i);
+        Inspector::Instance().SetDasmAddress(info->addr);
       }
       if (ImGui::IsItemClicked(ImGuiMouseButton_Left)) {
         Inspector::Instance().SetDasmAddress(info->addr);
@@ -666,6 +677,7 @@ void Inspector::DrawCopperBreakpoints(vamiga::VAmiga& emu) {
             ec == std::errc()) {
           if (!emu.copperBreakpoints.guardAt(new_addr)) {
             emu.copperBreakpoints.moveTo(i, new_addr);
+            Inspector::Instance().SetDasmAddress(new_addr);
           }
         }
       }
@@ -673,6 +685,7 @@ void Inspector::DrawCopperBreakpoints(vamiga::VAmiga& emu) {
       if (ImGui::Button(ICON_FA_TRASH_CAN)) {
         emu.copperBreakpoints.remove(i);
         ImGui::PopID();
+        Inspector::Instance().SetDasmAddress(info->addr);
         break; 
       }
       ImGui::PopID();
