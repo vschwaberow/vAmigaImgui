@@ -2,6 +2,7 @@
 #include <array>
 #include <format>
 #include <ranges>
+#include <span>
 #include "VAmiga.h"
 #include "constants.h"
 #include "Infrastructure/Option.h"
@@ -41,6 +42,45 @@ bool DrawValueCombo(const char* label, int& current_value,
     return true;
   }
   return false;
+}
+
+struct MediaSlotDescriptor {
+  std::string_view icon;
+  std::string_view prefix;
+  std::string_view title_prefix;
+  std::string_view popup_prefix;
+  std::string_view attach_label;
+  std::string_view detach_label;
+  std::string_view filters;
+  ImVec2 button_size{60, 0};
+  int id_offset = 0;
+};
+
+template <typename PathsSpan, typename AttachFn, typename DetachFn>
+void DrawMediaSlots(const MediaSlotDescriptor& desc, PathsSpan paths,
+                    AttachFn on_attach, DetachFn on_detach) {
+  for (int i : std::views::iota(0, static_cast<int>(paths.size()))) {
+    ImGui::PushID(desc.id_offset + i);
+    ImGui::AlignTextToFramePadding();
+    ImGui::Text("%s %s%d:", desc.icon.data(), desc.prefix.data(), i);
+    ImGui::SameLine();
+    ImGui::SetNextItemWidth(-160);
+    ImGui::InputText("##path", paths[i]);
+    ImGui::SameLine();
+    if (ImGui::Button(desc.attach_label.data(), desc.button_size)) {
+      gui::PickerOptions opts;
+      opts.title = std::format("{} {}{}", desc.title_prefix, desc.prefix, i);
+      opts.filters = desc.filters;
+      gui::FilePicker::Instance().Open(
+          std::format("{}{}", desc.popup_prefix, i), opts,
+          [on_attach, i](std::filesystem::path p) { on_attach(i, std::move(p)); });
+    }
+    ImGui::SameLine();
+    if (ImGui::Button(desc.detach_label.data(), desc.button_size)) {
+      on_detach(i);
+    }
+    ImGui::PopID();
+  }
 }
 }  // namespace
 namespace gui {
@@ -357,54 +397,32 @@ void SettingsWindow::DrawPeripherals(vamiga::VAmiga& emulator, const SettingsCon
   if (ImGui::BeginTabBar("StorageTabs")) {
     if (ImGui::BeginTabItem("Floppy Drives")) {
       ImGui::Spacing();
-      for (int i = 0; i < 4; ++i) {
-        ImGui::PushID(i);
-        ImGui::AlignTextToFramePadding();
-        ImGui::Text(ICON_FA_FLOPPY_DISK " DF%d:", i);
-        ImGui::SameLine();
-        ImGui::SetNextItemWidth(-160);
-        ImGui::InputText("##path", ctx.floppy_paths[i]);
-        ImGui::SameLine();
-        if (ImGui::Button("Insert", ImVec2(60, 0))) {
-          gui::PickerOptions opts;
-          opts.title = std::format("Select Floppy DF{}", i);
-          opts.filters = "Disk Files (*.adf *.adz *.dms *.ipf){.adf,.adz,.dms,.ipf},All Files (*.*){.*}";
-          gui::FilePicker::Instance().Open(
-              std::format("Floppy{}", i), opts,
-              [ctx, i](std::filesystem::path p) { ctx.on_insert_floppy(i, p); });
-        }
-        ImGui::SameLine();
-        if (ImGui::Button("Eject", ImVec2(60, 0))) {
-            ctx.on_eject_floppy(i);
-        }
-        ImGui::PopID();
-      }
+      static constexpr MediaSlotDescriptor floppy_desc{
+          ICON_FA_FLOPPY_DISK, "DF", "Select Floppy", "Floppy", "Insert",
+          "Eject",
+          "Disk Files (*.adf *.adz *.dms *.ipf){.adf,.adz,.dms,.ipf},All Files (*.*){.*}"};
+
+      DrawMediaSlots(floppy_desc,
+                     std::span(ctx.floppy_paths, gui::kFloppyDriveCount),
+                     [ctx](int i, std::filesystem::path p) {
+                       ctx.on_insert_floppy(i, std::move(p));
+                     },
+                     [ctx](int i) { ctx.on_eject_floppy(i); });
       ImGui::EndTabItem();
     }
     if (ImGui::BeginTabItem("Hard Drives")) {
         ImGui::Spacing();
-        for (int i = 0; i < 4; ++i) {
-            ImGui::PushID(100 + i);
-            ImGui::AlignTextToFramePadding();
-            ImGui::Text(ICON_FA_HARD_DRIVE " HD%d:", i);
-            ImGui::SameLine();
-            ImGui::SetNextItemWidth(-160);
-            ImGui::InputText("##path", ctx.hard_drive_paths[i]);
-            ImGui::SameLine();
-            if (ImGui::Button("Attach", ImVec2(60, 0))) {
-                gui::PickerOptions opts;
-                opts.title = std::format("Select Hard Drive HD{}", i);
-                opts.filters = "Hard Files (*.hdf){.hdf},All Files (*.*){.*}";
-                gui::FilePicker::Instance().Open(
-                    std::format("HardDrive{}", i), opts,
-                    [ctx, i](std::filesystem::path p) { ctx.on_attach_hd(i, p); });
-            }
-            ImGui::SameLine();
-            if (ImGui::Button("Detach", ImVec2(60, 0))) {
-                ctx.on_detach_hd(i);
-            }
-            ImGui::PopID();
-        }
+        static constexpr MediaSlotDescriptor hd_desc{
+            ICON_FA_HARD_DRIVE, "HD", "Select Hard Drive", "HardDrive",
+            "Attach", "Detach",
+            "Hard Files (*.hdf){.hdf},All Files (*.*){.*}", ImVec2(60, 0), 100};
+
+        DrawMediaSlots(hd_desc,
+                       std::span(ctx.hard_drive_paths, gui::kHardDriveCount),
+                       [ctx](int i, std::filesystem::path p) {
+                         ctx.on_attach_hd(i, std::move(p));
+                       },
+                       [ctx](int i) { ctx.on_detach_hd(i); });
         ImGui::EndTabItem();
     }
     ImGui::EndTabBar();
