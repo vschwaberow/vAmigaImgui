@@ -42,6 +42,7 @@ class Inspector {
   int mem_rows_ = 16;
   char mem_search_buf_[16] = "";
   bool hex_mode_ = true;
+  int selected_cia_ = 0;
 };
 }
 #endif

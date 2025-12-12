@@ -4,6 +4,7 @@
 #include <charconv>
 #include <cstdio>
 #include <format>
+#include <bitset>
 #include <optional>
 #include <ranges>
 #include "Components/Agnus/AgnusTypes.h"
@@ -551,35 +552,109 @@ void Inspector::DrawPaula(vamiga::VAmiga& emu) {
   }
 }
 void Inspector::DrawCIA(vamiga::VAmiga& emu) {
-  auto a = emu.ciaA.getInfo();
-  auto b = emu.ciaB.getInfo();
-  if (ImGui::BeginTable("CIA", 2, ImGuiTableFlags_BordersInnerV)) {
-    ImGui::TableSetupColumn("CIA A (Odd)");
-    ImGui::TableSetupColumn("CIA B (Even)");
-    ImGui::TableHeadersRow();
+  ImGui::Text("Select CIA");
+  ImGui::SameLine();
+  ImGui::RadioButton("CIA A", &selected_cia_, 0);
+  ImGui::SameLine();
+  ImGui::RadioButton("CIA B", &selected_cia_, 1);
+  const bool is_cia_a = selected_cia_ == 0;
+  const auto cia_info = is_cia_a ? emu.ciaA.getInfo() : emu.ciaB.getInfo();
+
+  static constexpr std::array<const char*, 8> portA_labels_a = {
+      "OVL", "LED", "/CHNG", "/WPRO", "/TK0", "/RDY", "GAME0", "GAME1"};
+  static constexpr std::array<const char*, 8> portB_labels_a = {
+      "DATA0", "DATA1", "DATA2", "DATA3", "DATA4", "DATA5", "DATA6",
+      "DATA7"};
+  static constexpr std::array<const char*, 8> portA_labels_b = {
+      "BUSY", "POUT", "SEL", "/DSR", "/CTS", "/RTS", "/DTR", "/DCD"};
+  static constexpr std::array<const char*, 8> portB_labels_b = {
+      "/STEP", "DIR", "/SIDE", "/SEL0", "/SEL1", "/SEL2", "/SEL3", "/MTR"};
+
+  const auto& portA_labels =
+      is_cia_a ? portA_labels_a : portA_labels_b;
+  const auto& portB_labels =
+      is_cia_a ? portB_labels_a : portB_labels_b;
+
+  auto show_bits = [](std::string_view title, uint8_t value,
+                      const std::array<const char*, 8>& labels) {
+    ImGui::TextDisabled("%s", title.data());
+    ImGui::SameLine();
+    for (int bit : std::views::iota(7, -1)) {
+      const bool set = (value >> bit) & 1;
+      ImGui::PushStyleColor(ImGuiCol_Text,
+                            set ? ImVec4(0.2f, 0.9f, 0.2f, 1.0f)
+                                : ImVec4(0.5f, 0.5f, 0.5f, 1.0f));
+      ImGui::Text("%s %s", set ? ICON_FA_SQUARE_CHECK : ICON_FA_SQUARE,
+                  labels[7 - bit] ? labels[7 - bit] : "");
+      ImGui::PopStyleColor();
+      if (bit % 2 == 1) ImGui::SameLine();
+    }
+  };
+
+  ImGui::Separator();
+  ImGui::Text("Ports");
+  ImGui::BeginGroup();
+  DrawRegister("PRA", cia_info.portA.reg, 8);
+  ImGui::SameLine();
+  ImGui::TextDisabled("[%s]", std::bitset<8>(cia_info.portA.reg).to_string().c_str());
+  DrawRegister("DDRA", cia_info.portA.dir, 8);
+  ImGui::SameLine();
+  ImGui::TextDisabled("[%s]", std::bitset<8>(cia_info.portA.dir).to_string().c_str());
+  show_bits("PORTA", cia_info.portA.port, portA_labels);
+  DrawRegister("PRB", cia_info.portB.reg, 8);
+  ImGui::SameLine();
+  ImGui::TextDisabled("[%s]", std::bitset<8>(cia_info.portB.reg).to_string().c_str());
+  DrawRegister("DDRB", cia_info.portB.dir, 8);
+  ImGui::SameLine();
+  ImGui::TextDisabled("[%s]", std::bitset<8>(cia_info.portB.dir).to_string().c_str());
+  show_bits("PORTB", cia_info.portB.port, portB_labels);
+  ImGui::EndGroup();
+
+  ImGui::Separator();
+  ImGui::Text("Timers");
+  if (ImGui::BeginTable("CIATimers", 2, ImGuiTableFlags_BordersInnerV)) {
+    auto timer_row = [](const char* name, const vamiga::CIATimerInfo& t) {
+      ImGui::Text("%s", name);
+      DrawRegister("COUNT", t.count, 16);
+      DrawRegister("LATCH", t.latch, 16);
+      DrawBit("Running", t.running);
+      DrawBit("Toggle", t.toggle);
+      DrawBit("PBOUT", t.pbout);
+      DrawBit("OneShot", t.oneShot);
+    };
     ImGui::TableNextRow();
     ImGui::TableSetColumnIndex(0);
-    DrawRegister("PRA", a.portA.reg, 8);
-    DrawRegister("DDRA", a.portA.dir, 8);
-    DrawRegister("PRB", a.portB.reg, 8);
-    DrawRegister("DDRB", a.portB.dir, 8);
-    DrawRegister("TA", a.timerA.count, 16);
-    DrawRegister("TB", a.timerB.count, 16);
-    DrawRegister("SDR", a.sdr, 8);
-    DrawRegister("ICR", a.icr, 8);
-    DrawRegister("IMR", a.imr, 8);
+    timer_row("Timer A", cia_info.timerA);
     ImGui::TableSetColumnIndex(1);
-    DrawRegister("PRA", b.portA.reg, 8);
-    DrawRegister("DDRA", b.portA.dir, 8);
-    DrawRegister("PRB", b.portB.reg, 8);
-    DrawRegister("DDRB", b.portB.dir, 8);
-    DrawRegister("TA", b.timerA.count, 16);
-    DrawRegister("TB", b.timerB.count, 16);
-    DrawRegister("SDR", b.sdr, 8);
-    DrawRegister("ICR", b.icr, 8);
-    DrawRegister("IMR", b.imr, 8);
+    timer_row("Timer B", cia_info.timerB);
     ImGui::EndTable();
   }
+
+  ImGui::Separator();
+  ImGui::Text("Time of Day");
+  uint32_t tod_val = cia_info.tod.value;
+  uint32_t alarm_val = cia_info.tod.alarm;
+  ImGui::Text("TOD  : %02X:%02X:%02X",
+              (tod_val >> 16) & 0xFF, (tod_val >> 8) & 0xFF, tod_val & 0xFF);
+  ImGui::Text("Alarm: %02X:%02X:%02X",
+              (alarm_val >> 16) & 0xFF, (alarm_val >> 8) & 0xFF,
+              alarm_val & 0xFF);
+  DrawBit("TOD IRQ Enable", cia_info.todIrqEnable);
+
+  ImGui::Separator();
+  ImGui::Text("Interrupts");
+  DrawRegister("ICR", cia_info.icr, 8);
+  ImGui::SameLine();
+  ImGui::TextDisabled("[%s]", std::bitset<8>(cia_info.icr).to_string().c_str());
+  DrawRegister("IMR", cia_info.imr, 8);
+  ImGui::SameLine();
+  ImGui::TextDisabled("[%s]", std::bitset<8>(cia_info.imr).to_string().c_str());
+  DrawBit("IRQ line low", !cia_info.irq);
+
+  ImGui::Separator();
+  ImGui::Text("Serial");
+  DrawRegister("SDR", cia_info.sdr, 8);
+  DrawRegister("SSR", cia_info.ssr, 8);
 }
 void Inspector::DrawCopper(vamiga::VAmiga& emu) {
   auto info = emu.agnus.getInfo();
