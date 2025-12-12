@@ -33,6 +33,9 @@ class Inspector {
   void DrawRegister(std::string_view label, uint32_t val, int width = 32);
   void DrawBit(std::string_view label, bool set);
   void DrawHexDump(vamiga::VAmiga& emu, uint32_t addr, int rows);
+ public:
+  void SetDasmAddress(int addr) { dasm_addr_ = addr; follow_pc_ = false; }
+ private:
   int dasm_addr_ = 0;
   bool follow_pc_ = true;
   int mem_addr_ = 0;

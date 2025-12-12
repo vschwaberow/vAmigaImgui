@@ -622,8 +622,16 @@ void Inspector::DrawCopperBreakpoints(vamiga::VAmiga& emu) {
       if (ImGui::Checkbox("##en", &enabled)) {
         emu.copperBreakpoints.toggle(i);
       }
+      if (ImGui::IsItemClicked(ImGuiMouseButton_Left)) {
+        inspector::Inspector::Instance().SetDasmAddress(info->addr);
+      }
       ImGui::TableSetColumnIndex(1);
-      ImGui::TextColored(ImVec4(0.6f, 0.8f, 1.0f, 1.0f), "%08X", info->addr);
+      if (ImGui::Selectable(
+              std::format("{:08X}", info->addr).c_str(), false,
+              ImGuiSelectableFlags_SpanAllColumns |
+                  ImGuiSelectableFlags_AllowDoubleClick)) {
+        inspector::Inspector::Instance().SetDasmAddress(info->addr);
+      }
       ImGui::TableSetColumnIndex(2);
       if (ImGui::Button(ICON_FA_TRASH_CAN)) {
         emu.copperBreakpoints.remove(i);
