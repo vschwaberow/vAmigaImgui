@@ -17,10 +17,10 @@ ConfigProvider::ConfigProvider(vamiga::DefaultsAPI& defaults_api)
   defaults_.setFallback(std::string(ConfigKeys::kExtRomPath), "");
   
   for (int i : std::views::iota(0, gui::kFloppyDriveCount)) {
-    defaults_.setFallback(std::format("DF{{}}Path", i), "");
+    defaults_.setFallback(std::format("DF{}Path", i), "");
   }
   for (int i : std::views::iota(0, gui::kHardDriveCount)) {
-    defaults_.setFallback(std::format("HD{{}}Path", i), "");
+    defaults_.setFallback(std::format("HD{}Path", i), "");
   }
   
   defaults_.setFallback(std::string(ConfigKeys::kPauseBg), std::to_string(Defaults::kPauseInBackground));
@@ -145,11 +145,11 @@ void ConfigProvider::SetInt(std::string_view key, int value) {
 }
 
 std::string ConfigProvider::GetFloppyPath(int drive) {
-  return GetString(std::format("DF{{}}Path", drive));
+  return GetString(std::format("DF{}Path", drive));
 }
 
 void ConfigProvider::SetFloppyPath(int drive, const std::string& path) {
-  SetString(std::format("DF{{}}Path", drive), path);
+  SetString(std::format("DF{}Path", drive), path);
 }
 
 }
