@@ -429,46 +429,131 @@ void Inspector::DrawSprite(const vamiga::SpriteInfo& info, int id) {
 }
 
 void Inspector::DrawPaula(vamiga::VAmiga& emu) {
-  auto info = emu.paula.getInfo();
-  if (ImGui::BeginTable("PaulaRegs", 2)) {
+  const bool running = emu.isRunning();
+  auto paula = running ? emu.paula.getCachedInfo() : emu.paula.getInfo();
+  auto dc = running ? emu.paula.diskController.getCachedInfo()
+                    : emu.paula.diskController.getInfo();
+  auto audio0 = running ? emu.paula.audioChannel0.getCachedInfo()
+                        : emu.paula.audioChannel0.getInfo();
+  auto audio1 = running ? emu.paula.audioChannel1.getCachedInfo()
+                        : emu.paula.audioChannel1.getInfo();
+  auto audio2 = running ? emu.paula.audioChannel2.getCachedInfo()
+                        : emu.paula.audioChannel2.getInfo();
+  auto audio3 = running ? emu.paula.audioChannel3.getCachedInfo()
+                        : emu.paula.audioChannel3.getInfo();
+
+  static constexpr std::array<const char*, 16> irq_names = {
+      nullptr,    nullptr,     "TBE",    "DSKBLK", "SOFT", "PORTS",
+      "COPER",    "VERTB",     "BLIT",   "AUD0",   "AUD1", "AUD2",
+      "AUD3",     "RBF",       "DSKSYN", "EXTER"};
+
+  auto bit_row = [](std::string_view label, u16 value,
+                    const std::array<const char*, 16>& names) {
+    ImGui::TextDisabled("%s", label.data());
+    ImGui::SameLine();
+    ImGui::BeginGroup();
+    for (int bit : std::views::iota(0, 16) | std::views::reverse) {
+      const bool set = (value & (1u << bit)) != 0;
+      const ImVec4 col =
+          set ? ImVec4(0.8f, 0.4f, 0.4f, 1.0f) : ImVec4(0.6f, 0.6f, 0.6f, 1.0f);
+      ImGui::PushStyleColor(ImGuiCol_Text, col);
+      ImGui::Text("%s %s", set ? ICON_FA_SQUARE_CHECK : ICON_FA_SQUARE,
+                  names[bit] ? names[bit] : "");
+      ImGui::PopStyleColor();
+      if (bit % 4 != 0) ImGui::SameLine();
+    }
+    ImGui::EndGroup();
+  };
+
+  bit_row("INTENA", paula.intena, irq_names);
+  bit_row("INTREQ", paula.intreq, irq_names);
+
+  ImGui::Separator();
+  ImGui::Text("ADKCON");
+  ImGui::BeginGroup();
+  auto adk_bit = [&](const char* name, u16 mask) {
+    const bool set = (paula.adkcon & mask) != 0;
+    ImGui::Text("%s %s", set ? ICON_FA_SQUARE_CHECK : ICON_FA_SQUARE, name);
+  };
+  adk_bit("PRECOMP1", 0x4000);
+  adk_bit("PRECOMP0", 0x2000);
+  adk_bit("MFMPREC", 0x1000);
+  adk_bit("UARTBRK", 0x0800);
+  adk_bit("WORDSYNC", 0x0400);
+  adk_bit("MSBSYNC", 0x0200);
+  adk_bit("FAST", 0x0100);
+  ImGui::EndGroup();
+
+  ImGui::Separator();
+  ImGui::Text("Disk Controller");
+  if (ImGui::BeginTable("DiskCtrl", 2, ImGuiTableFlags_RowBg)) {
     ImGui::TableNextRow();
     ImGui::TableSetColumnIndex(0);
-    DrawRegister("INTENA", info.intena, 16);
-    DrawRegister("INTREQ", info.intreq, 16);
+    DrawRegister("DSKLEN", dc.dsklen, 16);
+    DrawBit("DMAEN", dc.dsklen & 0x8000);
+    DrawBit("WRITE", dc.dsklen & 0x4000);
     ImGui::TableSetColumnIndex(1);
-    DrawRegister("ADKCON", info.adkcon, 16);
+    DrawRegister("DSKBYTR", dc.dskbytr, 16);
+    DrawBit("BYTEREADY", dc.dskbytr & 0x8000);
+    DrawBit("DMAON", dc.dskbytr & 0x4000);
+    DrawBit("DISKWRITE", dc.dskbytr & 0x2000);
+    DrawBit("WORDEQUAL", dc.dskbytr & 0x1000);
     ImGui::EndTable();
   }
   ImGui::Separator();
+  ImGui::Text("Drive: DF%d", static_cast<int>(dc.selectedDrive));
+  const char* state = "Idle";
+  switch (dc.state) {
+    case vamiga::DriveDmaState::OFF: state = "Idle"; break;
+    case vamiga::DriveDmaState::WAIT: state = "Waiting for sync"; break;
+    case vamiga::DriveDmaState::READ: state = "Reading"; break;
+    case vamiga::DriveDmaState::WRITE: state = "Writing"; break;
+    case vamiga::DriveDmaState::FLUSH: state = "Flushing"; break;
+  }
+  ImGui::Text("State: %s", state);
+  ImGui::Separator();
+  ImGui::Text("FIFO (%d)", dc.fifoCount);
+  ImGui::BeginGroup();
+  for (int idx : std::views::iota(0, static_cast<int>(dc.fifoCount))) {
+    if (idx >= 6) break;
+    ImGui::Text("%d: %02X", idx, dc.fifo[idx] & 0xFF);
+    if (idx < dc.fifoCount - 1) ImGui::SameLine();
+  }
+  ImGui::EndGroup();
+  ImGui::Separator();
+
   ImGui::Text("Audio Channels");
-  if (ImGui::BeginTable("AudioTable", 4, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg)) {
-      auto draw_ch = [&](std::string_view label, const vamiga::StateMachineInfo& ch) {
-          ImGui::TableNextColumn();
-          ImGui::Text("%s", label.data());
-          
-          ImU32 col = IM_COL32(100, 100, 100, 255);  
-          if (ch.state != 0) {
-              col = ch.dma ? IM_COL32(50, 200, 50, 255) : IM_COL32(200, 200, 50, 255);
-          }
-          
-          ImVec2 p = ImGui::GetCursorScreenPos();
-          ImGui::GetWindowDrawList()->AddCircleFilled(ImVec2(p.x + 10, p.y + 10), 6.0f, col);
-          ImGui::Dummy(ImVec2(20, 20));
-          ImGui::SameLine();
-          ImGui::Text(ch.dma ? "DMA" : (ch.state ? "Active" : "Idle"));
-          
-          DrawRegister("VOL", ch.audvol, 8);
-          DrawRegister("PER", ch.audper, 16);
-          DrawRegister("LEN", ch.audlen, 16);
-          DrawRegister("DAT", ch.auddat, 16);
-      };
-      
-      draw_ch("CH0 (L)", emu.paula.audioChannel0.getInfo());
-      draw_ch("CH1 (R)", emu.paula.audioChannel1.getInfo());
-      draw_ch("CH2 (R)", emu.paula.audioChannel2.getInfo());
-      draw_ch("CH3 (L)", emu.paula.audioChannel3.getInfo());
-      
-      ImGui::EndTable();
+  if (ImGui::BeginTable("AudioTable", 4,
+                        ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg)) {
+    auto draw_ch = [&](std::string_view label,
+                       const vamiga::StateMachineInfo& ch) {
+      ImGui::TableNextColumn();
+      ImGui::Text("%s", label.data());
+
+      ImU32 col = IM_COL32(100, 100, 100, 255);
+      if (ch.state != 0) {
+        col = ch.dma ? IM_COL32(50, 200, 50, 255)
+                     : IM_COL32(200, 200, 50, 255);
+      }
+      ImVec2 p = ImGui::GetCursorScreenPos();
+      ImGui::GetWindowDrawList()->AddCircleFilled(
+          ImVec2(p.x + 10, p.y + 10), 6.0f, col);
+      ImGui::Dummy(ImVec2(20, 20));
+      ImGui::SameLine();
+      ImGui::Text(ch.dma ? "DMA" : (ch.state ? "Active" : "Idle"));
+
+      DrawRegister("VOL", ch.audvolLatch, 8);
+      DrawRegister("PER", ch.audperLatch, 16);
+      DrawRegister("LEN", ch.audlenLatch, 16);
+      DrawRegister("DAT", ch.auddat, 16);
+    };
+
+    draw_ch("CH0 (L)", audio0);
+    draw_ch("CH1 (R)", audio1);
+    draw_ch("CH2 (R)", audio2);
+    draw_ch("CH3 (L)", audio3);
+
+    ImGui::EndTable();
   }
 }
 void Inspector::DrawCIA(vamiga::VAmiga& emu) {
