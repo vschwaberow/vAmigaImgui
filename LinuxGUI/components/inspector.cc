@@ -222,12 +222,17 @@ void Inspector::DrawBreakpoints(vamiga::VAmiga& emu) {
         SetDasmAddress(static_cast<int>(info->addr));
       }
       ImGui::TableSetColumnIndex(1);
+      ImGui::PushStyleColor(
+          ImGuiCol_Text,
+          info->enabled ? ImVec4(0.9f, 0.4f, 0.4f, 1.0f)
+                        : ImVec4(0.6f, 0.6f, 0.6f, 1.0f));
       if (ImGui::Selectable(
               std::format("{:08X}", info->addr).c_str(), false,
               ImGuiSelectableFlags_SpanAllColumns |
                   ImGuiSelectableFlags_AllowDoubleClick)) {
         SetDasmAddress(static_cast<int>(info->addr));
       }
+      ImGui::PopStyleColor();
       ImGui::TableSetColumnIndex(2);
       if (ImGui::Button(ICON_FA_TRASH_CAN)) {
         emu.cpu.breakpoints.remove(i);
@@ -567,12 +572,17 @@ void Inspector::DrawWatchpoints(vamiga::VAmiga& emu) {
         SetDasmAddress(static_cast<int>(info->addr));
       }
       ImGui::TableSetColumnIndex(1);
+      ImGui::PushStyleColor(
+          ImGuiCol_Text,
+          info->enabled ? ImVec4(0.3f, 0.8f, 1.0f, 1.0f)
+                        : ImVec4(0.6f, 0.6f, 0.6f, 1.0f));
       if (ImGui::Selectable(
               std::format("{:08X}", info->addr).c_str(), false,
               ImGuiSelectableFlags_SpanAllColumns |
                   ImGuiSelectableFlags_AllowDoubleClick)) {
         SetDasmAddress(static_cast<int>(info->addr));
       }
+      ImGui::PopStyleColor();
       ImGui::TableSetColumnIndex(2);
       ImGui::PushItemWidth(-1);
       ImGui::SetNextItemWidth(-1);
@@ -654,12 +664,17 @@ void Inspector::DrawCopperBreakpoints(vamiga::VAmiga& emu) {
         Inspector::Instance().SetDasmAddress(info->addr);
       }
       ImGui::TableSetColumnIndex(1);
+      ImGui::PushStyleColor(
+          ImGuiCol_Text,
+          info->enabled ? ImVec4(0.9f, 0.5f, 0.2f, 1.0f)
+                        : ImVec4(0.6f, 0.6f, 0.6f, 1.0f));
       if (ImGui::Selectable(
               std::format("{:08X}", info->addr).c_str(), false,
               ImGuiSelectableFlags_SpanAllColumns |
                   ImGuiSelectableFlags_AllowDoubleClick)) {
         Inspector::Instance().SetDasmAddress(info->addr);
       }
+      ImGui::PopStyleColor();
       ImGui::TableSetColumnIndex(2);
       ImGui::PushItemWidth(-1);
       ImGui::SetNextItemWidth(-1);
