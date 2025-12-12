@@ -834,7 +834,7 @@ void Inspector::DrawCopperList(int list_idx, bool symbolic, int extra_rows,
   ImGui::BeginChild(
       std::format("CopperList{}Child", list_idx).c_str(),
       ImVec2(0, 220), true,
-      ImGuiWindowFlags_HorizontalScrollbar | ImGuiWindowFlags_NavFlattened);
+      ImGuiWindowFlags_HorizontalScrollbar);
   ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(6, 2));
   bool scrolled_to_pc = false;
   for (int i : std::views::iota(0, total_rows)) {
