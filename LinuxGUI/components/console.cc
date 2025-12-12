@@ -51,11 +51,6 @@ void Console::ExecCommand(std::string_view command_line) {
   scroll_to_bottom_ = true;
 }
 
-static int TextEditCallbackStub(ImGuiInputTextCallbackData* data) {
-  Console* console = (Console*)data->UserData;
-  return console->TextEditCallback((void*)data);
-}
-
 int Console::TextEditCallback(void* data_void) {
   ImGuiInputTextCallbackData* data = (ImGuiInputTextCallbackData*)data_void;
 
@@ -243,8 +238,7 @@ void Console::Draw(bool* p_open, vamiga::VAmiga& emu) {
       ImGui::GetStyle().ItemSpacing.y + ImGui::GetFrameHeightWithSpacing();
   ImGui::BeginChild("ConsoleText", ImVec2(0, -footer_height_to_reserve),
                     false,
-                    ImGuiWindowFlags_HorizontalScrollbar |
-                        ImGuiWindowFlags_AlwaysUseWindowPadding);
+                    ImGuiWindowFlags_HorizontalScrollbar);
 
   // Compute cursor highlight position (relative to end of text).
   const int cursor_idx =
