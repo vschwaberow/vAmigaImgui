@@ -63,7 +63,8 @@ class SettingsWindow {
   void DrawCompatibility(vamiga::VAmiga& emulator);
   void DrawVideo(vamiga::VAmiga& emulator);
   void DrawAudio(vamiga::VAmiga& emulator, const SettingsContext& ctx);
-  void DrawEnumCombo(std::string_view label, vamiga::Opt opt, vamiga::VAmiga& emu);
+  template <vamiga::Opt opt>
+  void DrawEnumCombo(std::string_view label, vamiga::VAmiga& emu);
   void DrawRomInfo(std::string_view label, const vamiga::RomTraits& traits,
                    bool present, std::string* path_buffer,
                    std::function<void()> on_load,
@@ -71,5 +72,4 @@ class SettingsWindow {
   int current_tab_ = 0;
 };
 }
-
 #endif

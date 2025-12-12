@@ -1,6 +1,8 @@
 #include "components/settings_window.h"
-#include <format>
 #include <array>
+#include <format>
+#include <ranges>
+#include <span>
 #include "VAmiga.h"
 #include "constants.h"
 #include "Infrastructure/Option.h"
@@ -23,6 +25,64 @@ inline bool InputText(const char* label, std::string* str,
       str);
 }
 }
+
+namespace {
+template <std::size_t N>
+bool DrawValueCombo(const char* label, int& current_value,
+                    const std::array<const char*, N>& labels,
+                    const std::array<int, N>& values) {
+  const auto it = std::ranges::find(values, current_value);
+  int selected = (it != values.end())
+                     ? static_cast<int>(std::ranges::distance(values.begin(), it))
+                     : 0;
+
+  if (ImGui::Combo(label, &selected, labels.data(),
+                   static_cast<int>(labels.size()))) {
+    current_value = values[selected];
+    return true;
+  }
+  return false;
+}
+
+struct MediaSlotDescriptor {
+  std::string_view icon;
+  std::string_view prefix;
+  std::string_view title_prefix;
+  std::string_view popup_prefix;
+  std::string_view attach_label;
+  std::string_view detach_label;
+  std::string_view filters;
+  ImVec2 button_size{60, 0};
+  int id_offset = 0;
+};
+
+template <typename PathsSpan, typename AttachFn, typename DetachFn>
+void DrawMediaSlots(const MediaSlotDescriptor& desc, PathsSpan paths,
+                    AttachFn on_attach, DetachFn on_detach) {
+  for (int i : std::views::iota(0, static_cast<int>(paths.size()))) {
+    ImGui::PushID(desc.id_offset + i);
+    ImGui::AlignTextToFramePadding();
+    ImGui::Text("%s %s%d:", desc.icon.data(), desc.prefix.data(), i);
+    ImGui::SameLine();
+    ImGui::SetNextItemWidth(-160);
+    ImGui::InputText("##path", paths[i]);
+    ImGui::SameLine();
+    if (ImGui::Button(desc.attach_label.data(), desc.button_size)) {
+      gui::PickerOptions opts;
+      opts.title = std::format("{} {}{}", desc.title_prefix, desc.prefix, i);
+      opts.filters = desc.filters;
+      gui::FilePicker::Instance().Open(
+          std::format("{}{}", desc.popup_prefix, i), opts,
+          [on_attach, i](std::filesystem::path p) { on_attach(i, std::move(p)); });
+    }
+    ImGui::SameLine();
+    if (ImGui::Button(desc.detach_label.data(), desc.button_size)) {
+      on_detach(i);
+    }
+    ImGui::PopID();
+  }
+}
+}  // namespace
 namespace gui {
 void SettingsWindow::Draw(bool* p_open, vamiga::VAmiga& emulator,
                           const SettingsContext& ctx) {
@@ -108,6 +168,27 @@ void SettingsWindow::DrawGeneral(vamiga::VAmiga& emulator, const SettingsContext
       ImGui::Checkbox("Pause in background", ctx.pause_in_background);
   }
 }
+
+template <vamiga::Opt opt>
+void SettingsWindow::DrawEnumCombo(std::string_view label, vamiga::VAmiga& emu) {
+  static const auto items = vamiga::OptionParser::pairs(opt);
+  const auto current_val = emu.get(opt);
+
+  const auto preview_it = std::ranges::find_if(
+      items, [current_val](const auto& item) { return item.second == current_val; });
+  std::string_view preview = (preview_it != items.end()) ? preview_it->first : "Unknown";
+
+  if (ImGui::BeginCombo(label.data(), preview.data())) {
+    for (const auto& [name, value] : items) {
+      const bool is_selected = (current_val == value);
+      if (ImGui::Selectable(name.c_str(), is_selected)) {
+        emu.set(opt, value);
+      }
+      if (is_selected) ImGui::SetItemDefaultFocus();
+    }
+    ImGui::EndCombo();
+  }
+}
 void SettingsWindow::DrawInputs(vamiga::VAmiga& emulator, const SettingsContext& ctx) {
   ImGui::Text("Input Settings");
   ImGui::Separator();
@@ -158,28 +239,22 @@ void SettingsWindow::DrawHardware(vamiga::VAmiga& emulator) {
   ImGui::Text("Memory");
   ImGui::Separator();
   int chip_ram = static_cast<int>(emulator.get(vamiga::Opt::MEM_CHIP_RAM));
-  static constexpr std::array chip_items = { "512 KB", "1 MB", "2 MB" };
-  int chip_values[] = { 512, 1024, 2048 };
-  int current_chip = 0;
-  for (int i = 0; i < 3; ++i) if (chip_ram == chip_values[i]) current_chip = i;
-  if (ImGui::Combo("Chip RAM", &current_chip, chip_items.data(), chip_items.size())) {
-    emulator.set(vamiga::Opt::MEM_CHIP_RAM, chip_values[current_chip]);
+  static constexpr auto chip_items = std::to_array<const char*>({"512 KB", "1 MB", "2 MB"});
+  static constexpr auto chip_values = std::to_array<int>({512, 1024, 2048});
+  if (DrawValueCombo("Chip RAM", chip_ram, chip_items, chip_values)) {
+    emulator.set(vamiga::Opt::MEM_CHIP_RAM, chip_ram);
   }
   int slow_ram = static_cast<int>(emulator.get(vamiga::Opt::MEM_SLOW_RAM));
-  static constexpr std::array slow_items = { "None", "512 KB", "1 MB", "1.5 MB" };
-  int slow_values[] = { 0, 512, 1024, 1536 };
-  int current_slow = 0;
-  for (int i = 0; i < 4; ++i) if (slow_ram == slow_values[i]) current_slow = i;
-  if (ImGui::Combo("Slow RAM", &current_slow, slow_items.data(), slow_items.size())) {
-    emulator.set(vamiga::Opt::MEM_SLOW_RAM, slow_values[current_slow]);
+  static constexpr auto slow_items = std::to_array<const char*>({"None", "512 KB", "1 MB", "1.5 MB"});
+  static constexpr auto slow_values = std::to_array<int>({0, 512, 1024, 1536});
+  if (DrawValueCombo("Slow RAM", slow_ram, slow_items, slow_values)) {
+    emulator.set(vamiga::Opt::MEM_SLOW_RAM, slow_ram);
   }
   int fast_ram = static_cast<int>(emulator.get(vamiga::Opt::MEM_FAST_RAM));
-  static constexpr std::array fast_items = { "None", "512 KB", "1 MB", "2 MB", "4 MB", "8 MB" };
-  int fast_values[] = { 0, 512, 1024, 2048, 4096, 8192 };
-  int current_fast = 0;
-  for (int i = 0; i < 6; ++i) if (fast_ram == fast_values[i]) current_fast = i;
-  if (ImGui::Combo("Fast RAM", &current_fast, fast_items.data(), fast_items.size())) {
-    emulator.set(vamiga::Opt::MEM_FAST_RAM, fast_values[current_fast]);
+  static constexpr auto fast_items = std::to_array<const char*>({"None", "512 KB", "1 MB", "2 MB", "4 MB", "8 MB"});
+  static constexpr auto fast_values = std::to_array<int>({0, 512, 1024, 2048, 4096, 8192});
+  if (DrawValueCombo("Fast RAM", fast_ram, fast_items, fast_values)) {
+    emulator.set(vamiga::Opt::MEM_FAST_RAM, fast_ram);
   }
   ImGui::Spacing();
   if (ImGui::Button("Hard Reset Machine")) {
@@ -192,7 +267,7 @@ void SettingsWindow::DrawHardware(vamiga::VAmiga& emulator) {
 void SettingsWindow::DrawPerformance(vamiga::VAmiga& emulator) {
   ImGui::Text("Warp Mode");
   ImGui::Separator();
-  DrawEnumCombo("Activation", vamiga::Opt::AMIGA_WARP_MODE, emulator);
+  DrawEnumCombo<vamiga::Opt::AMIGA_WARP_MODE>("Activation", emulator);
   int warp_boot = static_cast<int>(emulator.get(vamiga::Opt::AMIGA_WARP_BOOT));
   if (ImGui::InputInt("Warp Boot (sec)", &warp_boot)) {
       emulator.set(vamiga::Opt::AMIGA_WARP_BOOT, warp_boot);
@@ -265,7 +340,7 @@ void SettingsWindow::DrawCompatibility(vamiga::VAmiga& emulator) {
       emulator.set(vamiga::Opt::DC_SPEED, dc_speed);
   }
   
-  DrawEnumCombo("Mechanics", vamiga::Opt::DRIVE_MECHANICS, emulator);
+  DrawEnumCombo<vamiga::Opt::DRIVE_MECHANICS>("Mechanics", emulator);
   
   bool lock_sync = static_cast<bool>(emulator.get(vamiga::Opt::DC_LOCK_DSKSYNC));
   if (ImGui::Checkbox("Lock DskSync", &lock_sync)) {
@@ -343,88 +418,43 @@ void SettingsWindow::DrawPeripherals(vamiga::VAmiga& emulator, const SettingsCon
   if (ImGui::BeginTabBar("StorageTabs")) {
     if (ImGui::BeginTabItem("Floppy Drives")) {
       ImGui::Spacing();
-      for (int i = 0; i < 4; ++i) {
-        ImGui::PushID(i);
-        ImGui::AlignTextToFramePadding();
-        ImGui::Text(ICON_FA_FLOPPY_DISK " DF%d:", i);
-        ImGui::SameLine();
-        ImGui::SetNextItemWidth(-160);
-        ImGui::InputText("##path", ctx.floppy_paths[i]);
-        ImGui::SameLine();
-        if (ImGui::Button("Insert", ImVec2(60, 0))) {
-          gui::PickerOptions opts;
-          opts.title = std::format("Select Floppy DF{}", i);
-          opts.filters = "Disk Files (*.adf *.adz *.dms *.ipf){.adf,.adz,.dms,.ipf},All Files (*.*){.*}";
-          gui::FilePicker::Instance().Open(
-              std::format("Floppy{}", i), opts,
-              [ctx, i](std::filesystem::path p) { ctx.on_insert_floppy(i, p); });
-        }
-        ImGui::SameLine();
-        if (ImGui::Button("Eject", ImVec2(60, 0))) {
-            ctx.on_eject_floppy(i);
-        }
-        ImGui::PopID();
-      }
+      static constexpr MediaSlotDescriptor floppy_desc{
+          ICON_FA_FLOPPY_DISK, "DF", "Select Floppy", "Floppy", "Insert",
+          "Eject",
+          "Disk Files (*.adf *.adz *.dms *.ipf){.adf,.adz,.dms,.ipf},All Files (*.*){.*}"};
+
+      DrawMediaSlots(floppy_desc,
+                     std::span(ctx.floppy_paths, gui::kFloppyDriveCount),
+                     [ctx](int i, std::filesystem::path p) {
+                       ctx.on_insert_floppy(i, std::move(p));
+                     },
+                     [ctx](int i) { ctx.on_eject_floppy(i); });
       ImGui::EndTabItem();
     }
     if (ImGui::BeginTabItem("Hard Drives")) {
         ImGui::Spacing();
-        for (int i = 0; i < 4; ++i) {
-            ImGui::PushID(100 + i);
-            ImGui::AlignTextToFramePadding();
-            ImGui::Text(ICON_FA_HARD_DRIVE " HD%d:", i);
-            ImGui::SameLine();
-            ImGui::SetNextItemWidth(-160);
-            ImGui::InputText("##path", ctx.hard_drive_paths[i]);
-            ImGui::SameLine();
-            if (ImGui::Button("Attach", ImVec2(60, 0))) {
-                gui::PickerOptions opts;
-                opts.title = std::format("Select Hard Drive HD{}", i);
-                opts.filters = "Hard Files (*.hdf){.hdf},All Files (*.*){.*}";
-                gui::FilePicker::Instance().Open(
-                    std::format("HardDrive{}", i), opts,
-                    [ctx, i](std::filesystem::path p) { ctx.on_attach_hd(i, p); });
-            }
-            ImGui::SameLine();
-            if (ImGui::Button("Detach", ImVec2(60, 0))) {
-                ctx.on_detach_hd(i);
-            }
-            ImGui::PopID();
-        }
+        static constexpr MediaSlotDescriptor hd_desc{
+            ICON_FA_HARD_DRIVE, "HD", "Select Hard Drive", "HardDrive",
+            "Attach", "Detach",
+            "Hard Files (*.hdf){.hdf},All Files (*.*){.*}", ImVec2(60, 0), 100};
+
+        DrawMediaSlots(hd_desc,
+                       std::span(ctx.hard_drive_paths, gui::kHardDriveCount),
+                       [ctx](int i, std::filesystem::path p) {
+                         ctx.on_attach_hd(i, std::move(p));
+                       },
+                       [ctx](int i) { ctx.on_detach_hd(i); });
         ImGui::EndTabItem();
     }
     ImGui::EndTabBar();
   }
 }
 
-void SettingsWindow::DrawEnumCombo(std::string_view label, vamiga::Opt opt, vamiga::VAmiga& emu) {
-    long current_val = emu.get(opt);
-    std::vector<std::pair<std::string, long>> items = vamiga::OptionParser::pairs(opt);
-    
-    std::string preview = "Unknown";
-    for (const auto& item : items) {
-        if (item.second == current_val) {
-            preview = item.first;
-            break;
-        }
-    }
-    
-    if (ImGui::BeginCombo(label.data(), preview.c_str())) {
-        for (const auto& item : items) {
-            bool is_selected = (current_val == item.second);
-            if (ImGui::Selectable(item.first.c_str(), is_selected)) {
-                emu.set(opt, item.second);
-            }
-            if (is_selected) ImGui::SetItemDefaultFocus();
-        }
-        ImGui::EndCombo();
-    }
-}
 
 void SettingsWindow::DrawVideo(vamiga::VAmiga& emulator) {
   ImGui::Text("Color");
   ImGui::Separator();
-  DrawEnumCombo("Palette", vamiga::Opt::MON_PALETTE, emulator);
+  DrawEnumCombo<vamiga::Opt::MON_PALETTE>("Palette", emulator);
   
   int brightness = static_cast<int>(emulator.get(vamiga::Opt::MON_BRIGHTNESS));
   if (ImGui::SliderInt("Brightness", &brightness, -100, 100, "%d%%")) {
@@ -442,14 +472,14 @@ void SettingsWindow::DrawVideo(vamiga::VAmiga& emulator) {
   ImGui::Spacing();
   ImGui::Text("Geometry");
   ImGui::Separator();
-  DrawEnumCombo("Zoom Mode", vamiga::Opt::MON_ZOOM, emulator);
-  DrawEnumCombo("Centering", vamiga::Opt::MON_CENTER, emulator);
+  DrawEnumCombo<vamiga::Opt::MON_ZOOM>("Zoom Mode", emulator);
+  DrawEnumCombo<vamiga::Opt::MON_CENTER>("Centering", emulator);
   
   ImGui::Spacing();
   ImGui::Text("CRT Effects");
   ImGui::Separator();
   
-  DrawEnumCombo("Scanlines", vamiga::Opt::MON_SCANLINES, emulator);
+  DrawEnumCombo<vamiga::Opt::MON_SCANLINES>("Scanlines", emulator);
   int scanlines = static_cast<int>(emulator.get(vamiga::Opt::MON_SCANLINES));
   if (scanlines > 0) {
       int scan_weight = static_cast<int>(emulator.get(vamiga::Opt::MON_SCANLINE_WEIGHT));
@@ -458,7 +488,7 @@ void SettingsWindow::DrawVideo(vamiga::VAmiga& emulator) {
       }
   }
   
-  DrawEnumCombo("Dotmask", vamiga::Opt::MON_DOTMASK, emulator);
+  DrawEnumCombo<vamiga::Opt::MON_DOTMASK>("Dotmask", emulator);
   
   bool blur = static_cast<bool>(emulator.get(vamiga::Opt::MON_BLUR));
   if (ImGui::Checkbox("Blur", &blur)) {
@@ -482,8 +512,8 @@ void SettingsWindow::DrawVideo(vamiga::VAmiga& emulator) {
       }
   }
   
-  DrawEnumCombo("Enhancer", vamiga::Opt::MON_ENHANCER, emulator);
-  DrawEnumCombo("Upscaler", vamiga::Opt::MON_UPSCALER, emulator);
+  DrawEnumCombo<vamiga::Opt::MON_ENHANCER>("Enhancer", emulator);
+  DrawEnumCombo<vamiga::Opt::MON_UPSCALER>("Upscaler", emulator);
   
   bool flicker = static_cast<bool>(emulator.get(vamiga::Opt::MON_FLICKER));
   if (ImGui::Checkbox("Interlace Flicker", &flicker)) {
@@ -511,6 +541,27 @@ void SettingsWindow::DrawVideo(vamiga::VAmiga& emulator) {
       }
   }
 }
+
+// Explicit instantiations for the enum combos we use.
+template void SettingsWindow::DrawEnumCombo<vamiga::Opt::AMIGA_WARP_MODE>(
+    std::string_view, vamiga::VAmiga&);
+template void SettingsWindow::DrawEnumCombo<vamiga::Opt::DRIVE_MECHANICS>(
+    std::string_view, vamiga::VAmiga&);
+template void SettingsWindow::DrawEnumCombo<vamiga::Opt::MON_PALETTE>(
+    std::string_view, vamiga::VAmiga&);
+template void SettingsWindow::DrawEnumCombo<vamiga::Opt::MON_ZOOM>(
+    std::string_view, vamiga::VAmiga&);
+template void SettingsWindow::DrawEnumCombo<vamiga::Opt::MON_CENTER>(
+    std::string_view, vamiga::VAmiga&);
+template void SettingsWindow::DrawEnumCombo<vamiga::Opt::MON_SCANLINES>(
+    std::string_view, vamiga::VAmiga&);
+template void SettingsWindow::DrawEnumCombo<vamiga::Opt::MON_DOTMASK>(
+    std::string_view, vamiga::VAmiga&);
+template void SettingsWindow::DrawEnumCombo<vamiga::Opt::MON_ENHANCER>(
+    std::string_view, vamiga::VAmiga&);
+template void SettingsWindow::DrawEnumCombo<vamiga::Opt::MON_UPSCALER>(
+    std::string_view, vamiga::VAmiga&);
+
 void SettingsWindow::DrawAudio(vamiga::VAmiga& emulator, const SettingsContext& ctx) {
   ImGui::Text("Audio Settings");
   ImGui::Separator();

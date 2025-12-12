@@ -27,6 +27,16 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "Clang" OR CMAKE_CXX_COMPILER_ID MATCHES "GNU")
     target_compile_options(ImGuiFileDialog PRIVATE -Wno-deprecated-enum-enum-conversion)
 endif()
 
+FetchContent_Declare(
+    googletest
+    GIT_REPOSITORY https://github.com/google/googletest.git
+    GIT_TAG        v1.14.0
+)
+set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+FetchContent_MakeAvailable(googletest)
+
+enable_testing()
+
 add_executable(vAmigaLinux
     main.cc
     application.cc
@@ -73,3 +83,17 @@ target_compile_definitions(vAmigaLinux PRIVATE
 )
 
 target_link_libraries(vAmigaLinux PRIVATE GL dl)
+
+add_executable(vAmigaTests
+    tests/smoke_test.cc
+    tests/config_provider_test.cc
+    services/config_provider.cc
+)
+target_link_libraries(vAmigaTests PRIVATE
+    gtest_main
+    VACore
+)
+target_include_directories(vAmigaTests PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}
+)
+add_test(NAME vAmigaTests COMMAND vAmigaTests)
