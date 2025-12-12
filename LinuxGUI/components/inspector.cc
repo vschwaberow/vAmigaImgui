@@ -3,6 +3,7 @@
 #include <charconv>
 #include <cstdio>
 #include <format>
+#include <optional>
 #include <ranges>
 #include "Components/Agnus/AgnusTypes.h"
 #include "Components/CIA/CIATypes.h"
@@ -147,11 +148,47 @@ void Inspector::DrawCPU(vamiga::VAmiga& emu) {
     uint32_t addr = dasm_addr_;
     ImGui::BeginChild("Dasm", ImVec2(0, 200), true);
     for ([[maybe_unused]] int i : std::views::iota(0, 12)) {
+      std::optional<vamiga::GuardInfo> bp = emu.cpu.breakpoints.guardAt(addr);
+      bool is_bp_enabled = bp && bp->enabled;
+      bool is_bp = bp.has_value();
+      ImGui::PushID(addr);
+      if (is_bp) {
+        ImGui::PushStyleColor(ImGuiCol_Button,
+                              is_bp_enabled ? ImVec4(0.8f, 0.2f, 0.2f, 1.0f)
+                                            : ImVec4(0.5f, 0.5f, 0.5f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
+                              is_bp_enabled ? ImVec4(1.0f, 0.3f, 0.3f, 1.0f)
+                                            : ImVec4(0.7f, 0.7f, 0.7f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive,
+                              is_bp_enabled ? ImVec4(0.8f, 0.2f, 0.2f, 1.0f)
+                                            : ImVec4(0.5f, 0.5f, 0.5f, 1.0f));
+      }
+      if (ImGui::SmallButton(is_bp ? ICON_FA_CIRCLE : ICON_FA_CIRCLE_DOT)) {
+        if (!is_bp) {
+          emu.cpu.breakpoints.setAt(addr);
+        } else if (is_bp_enabled) {
+          emu.cpu.breakpoints.disableAt(addr);
+        } else {
+          emu.cpu.breakpoints.enableAt(addr);
+        }
+      }
+      if (is_bp && ImGui::IsItemClicked(ImGuiMouseButton_Right)) {
+        emu.cpu.breakpoints.removeAt(addr);
+      }
+      ImGui::SetItemTooltip(is_bp
+                                ? (is_bp_enabled ? "Disable (right-click to remove)"
+                                                 : "Enable (right-click to remove)")
+                                : "Set breakpoint");
+      if (is_bp) {
+        ImGui::PopStyleColor(3);
+      }
+      ImGui::SameLine();
       bool is_pc = (addr == cpu.pc0);
       if (is_pc) ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1, 1, 0, 1));
       std::string instr = emu.cpu.debugger.disassembleInstr(addr, &len);
       ImGui::Text("%08X: %s", addr, instr.c_str());
       if (is_pc) ImGui::PopStyleColor();
+      ImGui::PopID();
       addr += len;
     }
     ImGui::EndChild();
