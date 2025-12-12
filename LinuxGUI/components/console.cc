@@ -17,10 +17,6 @@ Console& Console::Instance() {
 
 Console::Console()
     : input_buf_(256, 0), scroll_to_bottom_(true), history_pos_(-1) {
-  AddLog("Welcome to vAmiga RetroShell!");
-
-  commands_ = {"HELP", "HISTORY", "CLEAR", "CLASSIFY", "ECHO", "VAR", "TYPE",
-               "MD",   "CLS",     "MEM",   "REGS",     "DISASM", "BP"};
 }
 
 void Console::SetCommandCallback(std::function<void(const std::string&)> cb) {
@@ -144,6 +140,66 @@ int Console::TextEditCallback(void* data_void) {
   return 0;
 }
 
+bool Console::HandleEvent(const SDL_Event& event, vamiga::VAmiga& emu) {
+  if (!has_focus_) return false;
+
+  const bool shift = (SDL_GetModState() & KMOD_SHIFT) != 0;
+
+  if (event.type == SDL_TEXTINPUT) {
+    const char* t = event.text.text;
+    while (t && *t) {
+      emu.retroShell.press(*t++);
+    }
+    return true;
+  }
+
+  if (event.type == SDL_KEYDOWN) {
+    switch (event.key.keysym.sym) {
+      case SDLK_UP:
+        emu.retroShell.press(vamiga::RSKey::UP, shift);
+        return true;
+      case SDLK_DOWN:
+        emu.retroShell.press(vamiga::RSKey::DOWN, shift);
+        return true;
+      case SDLK_LEFT:
+        emu.retroShell.press(vamiga::RSKey::LEFT, shift);
+        return true;
+      case SDLK_RIGHT:
+        emu.retroShell.press(vamiga::RSKey::RIGHT, shift);
+        return true;
+      case SDLK_PAGEUP:
+        emu.retroShell.press(vamiga::RSKey::PAGE_UP, shift);
+        return true;
+      case SDLK_PAGEDOWN:
+        emu.retroShell.press(vamiga::RSKey::PAGE_DOWN, shift);
+        return true;
+      case SDLK_DELETE:
+        emu.retroShell.press(vamiga::RSKey::DEL, shift);
+        return true;
+      case SDLK_BACKSPACE:
+        emu.retroShell.press(vamiga::RSKey::BACKSPACE, shift);
+        return true;
+      case SDLK_HOME:
+        emu.retroShell.press(vamiga::RSKey::HOME, shift);
+        return true;
+      case SDLK_END:
+        emu.retroShell.press(vamiga::RSKey::END, shift);
+        return true;
+      case SDLK_RETURN:
+      case SDLK_KP_ENTER:
+        emu.retroShell.press(vamiga::RSKey::RETURN, shift);
+        return true;
+      case SDLK_TAB:
+        emu.retroShell.press(vamiga::RSKey::TAB, shift);
+        return true;
+      default:
+        break;
+    }
+  }
+
+  return false;
+}
+
 void Console::Draw(bool* p_open, vamiga::VAmiga& emu) {
   if (!p_open || !*p_open) return;
 
@@ -153,104 +209,95 @@ void Console::Draw(bool* p_open, vamiga::VAmiga& emu) {
     return;
   }
 
-  if (ImGui::BeginPopupContextItem()) {
-    if (ImGui::MenuItem("Close Console")) *p_open = false;
-    ImGui::EndPopup();
-  }
+  auto info = emu.retroShell.getInfo();
+  const char* text_ptr = emu.retroShell.text();
+  std::string_view console_text = text_ptr ? text_ptr : "";
 
-  if (ImGui::Button("Clear")) {
-    items_.clear();
-  }
-  ImGui::SameLine();
-  if (ImGui::Button("Copy")) {
-    ImGui::LogToClipboard();
-  }
-  ImGui::SameLine();
+  static const ImVec4 text_colors[] = {
+      ImVec4(0.81f, 0.81f, 1.0f, 1.0f),   // Commander
+      ImVec4(1.0f, 0.81f, 0.81f, 1.0f),   // Debugger
+      ImVec4(0.87f, 1.0f, 0.87f, 1.0f)};  // Navigator
+  static const ImVec4 bg_colors[] = {
+      ImVec4(0.38f, 0.38f, 0.38f, 0.82f),
+      ImVec4(0.38f, 0.38f, 0.38f, 0.82f),
+      ImVec4(0.38f, 0.38f, 0.38f, 0.82f)};
+  static const ImVec4 cursor_color = ImVec4(1.0f, 1.0f, 1.0f, 0.5f);
 
-  static ImGuiTextFilter filter;
-  filter.Draw("Filter (\"incl,-excl\")", 180);
-  bool has_filter = filter.IsActive();
-  ImGui::Separator();
+  const int console_idx = std::clamp<int>(info.console, 0, 2);
+  ImGui::PushStyleColor(ImGuiCol_Text, text_colors[console_idx]);
+  ImGui::PushStyleColor(ImGuiCol_ChildBg, bg_colors[console_idx]);
 
-  auto text_ptr = emu.retroShell.text();
-  std::string_view current_retro_shell_text = text_ptr ? text_ptr : "";
-
-  if (current_retro_shell_text != retro_shell_current_text_) {
-    size_t old_len = retro_shell_current_text_.length();
-    if (current_retro_shell_text.length() > old_len) {
-      std::string_view new_output = current_retro_shell_text.substr(old_len);
-
-      size_t start = 0;
-      while (start < new_output.length()) {
-        size_t end = new_output.find('\n', start);
-        if (end == std::string_view::npos) end = new_output.length();
-
-        std::string_view line = new_output.substr(start, end - start);
-        if (!line.empty()) {
-          AddLog("{}", line);
-        }
-        start = end + 1;
-      }
-    }
-    retro_shell_current_text_ = std::string(current_retro_shell_text);
-  }
+  ImGui::TextDisabled("Console: %s",
+                      console_idx == 0   ? "Commander"
+                      : console_idx == 1 ? "Debugger"
+                                         : "Navigator");
 
   const float footer_height_to_reserve =
       ImGui::GetStyle().ItemSpacing.y + ImGui::GetFrameHeightWithSpacing();
-  ImGui::BeginChild("ScrollingRegion", ImVec2(0, -footer_height_to_reserve),
-                    false, ImGuiWindowFlags_HorizontalScrollbar);
+  ImGui::BeginChild("ConsoleText", ImVec2(0, -footer_height_to_reserve),
+                    false,
+                    ImGuiWindowFlags_HorizontalScrollbar |
+                        ImGuiWindowFlags_AlwaysUseWindowPadding);
 
-  if (ImGui::BeginPopupContextWindow()) {
-    if (ImGui::Selectable("Clear")) items_.clear();
-    ImGui::EndPopup();
-  }
+  // Compute cursor highlight position (relative to end of text).
+  const int cursor_idx =
+      std::clamp<int>(static_cast<int>(console_text.size() + info.cursorRel),
+                      0, static_cast<int>(console_text.size()));
 
-  ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(4, 1));
-  for (const auto& item : items_) {
-    if (has_filter && !filter.PassFilter(item.c_str())) continue;
+  ImDrawList* draw_list = ImGui::GetWindowDrawList();
+  const ImVec2 start_pos = ImGui::GetCursorScreenPos();
+  ImVec2 pos = start_pos;
+  const float line_height = ImGui::GetTextLineHeight();
+  ImVec2 highlight_min = pos;
+  ImVec2 highlight_max = pos;
+  bool have_cursor = false;
 
-    bool has_color = false;
-    if (item.find("[error]") != std::string::npos) {
-      ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.4f, 0.4f, 1.0f));
-      has_color = true;
-    } else if (item.starts_with("# ")) {
-      ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.8f, 0.6f, 1.0f));
-      has_color = true;
+  for (int i = 0; i <= static_cast<int>(console_text.size()); ++i) {
+    if (i == cursor_idx) {
+      have_cursor = true;
+      highlight_min = pos;
+      const ImVec2 char_size =
+          ImGui::CalcTextSize(i < static_cast<int>(console_text.size())
+                                  ? &console_text[i]
+                                  : " ",
+                              i < static_cast<int>(console_text.size())
+                                  ? &console_text[i] + 1
+                                  : nullptr);
+      highlight_max = ImVec2(pos.x + char_size.x, pos.y + line_height);
     }
 
-    ImGui::TextUnformatted(item.c_str());
-    if (has_color) ImGui::PopStyleColor();
-  }
-  ImGui::PopStyleVar();
+    if (i == static_cast<int>(console_text.size())) break;
 
-  if (scroll_to_bottom_ || (ImGui::GetScrollY() >= ImGui::GetScrollMaxY()))
+    const char c = console_text[i];
+    if (c == '\n') {
+      pos.x = start_pos.x;
+      pos.y += line_height;
+    } else {
+      const ImVec2 char_size = ImGui::CalcTextSize(&c, &c + 1);
+      pos.x += char_size.x;
+    }
+  }
+
+  if (have_cursor) {
+    draw_list->AddRectFilled(
+        highlight_min, highlight_max, ImGui::GetColorU32(cursor_color));
+  }
+
+  ImGui::TextUnformatted(console_text.data(),
+                         console_text.data() + console_text.size());
+
+  if (console_text.size() != last_text_size_) {
     ImGui::SetScrollHereY(1.0f);
-  scroll_to_bottom_ = false;
+    last_text_size_ = console_text.size();
+  }
+
+  has_focus_ = ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows);
+  if (has_focus_) {
+    SDL_StartTextInput();
+  }
 
   ImGui::EndChild();
-  ImGui::Separator();
-
-  bool reclaim_focus = false;
-  ImGuiInputTextFlags input_text_flags =
-      ImGuiInputTextFlags_EnterReturnsTrue |
-      ImGuiInputTextFlags_CallbackCompletion |
-      ImGuiInputTextFlags_CallbackHistory;
-  if (ImGui::InputText("Input", input_buf_.data(), input_buf_.size(),
-                       input_text_flags, &TextEditCallbackStub, (void*)this)) {
-    std::string_view sv(input_buf_.data());
-    auto start = sv.find_first_not_of(" \t\n\r");
-    if (start != std::string_view::npos) {
-      auto end = sv.find_last_not_of(" \t\n\r");
-      sv = sv.substr(start, end - start + 1);
-      ExecCommand(sv);
-    }
-
-    std::fill(input_buf_.begin(), input_buf_.end(), 0);
-    reclaim_focus = true;
-  }
-
-  ImGui::SetItemDefaultFocus();
-  if (reclaim_focus) ImGui::SetKeyboardFocusHere(-1);
+  ImGui::PopStyleColor(2);
 
   ImGui::End();
 }

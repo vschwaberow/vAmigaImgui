@@ -296,6 +296,11 @@ void Application::HandleEvents(bool& done) {
   while (SDL_PollEvent(&event)) {
     ImGui_ImplSDL2_ProcessEvent(&event);
     if (event.type == SDL_QUIT) done = true;
+    bool console_captured = false;
+    if (show_console_) {
+        console_captured = gui::Console::Instance().HandleEvent(event, emulator_);
+        if (console_captured) continue;
+    }
     if (event.type == SDL_WINDOWEVENT) {
       if (event.window.event == SDL_WINDOWEVENT_CLOSE &&
           event.window.windowID == SDL_GetWindowID(window_.get()))
