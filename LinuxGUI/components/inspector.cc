@@ -153,7 +153,6 @@ void Inspector::DrawCPU(vamiga::VAmiga& emu) {
       std::optional<vamiga::GuardInfo> wp = emu.cpu.watchpoints.guardAt(addr);
       bool is_bp_enabled = bp && bp->enabled;
       bool is_bp = bp.has_value();
-      bool is_wp_enabled = wp && wp->enabled;
       bool is_wp = wp.has_value();
       ImGui::PushID(addr);
       if (is_bp) {
