@@ -1,4 +1,6 @@
 #include <gtest/gtest.h>
+#include <cstdlib>
+#include <filesystem>
 #include <memory>
 #include <string>
 
@@ -42,4 +44,32 @@ TEST(ConfigProviderTest, GetIntFallsBackOnInvalid) {
 
   provider.SetString(gui::ConfigKeys::kAudioVolume, "not-an-int");
   EXPECT_EQ(provider.GetInt(gui::ConfigKeys::kAudioVolume, 7), 7);
+}
+
+TEST(ConfigProviderTest, SaveAndLoadRoundTripsValues) {
+  const auto temp_home =
+      std::filesystem::temp_directory_path() / "vamiga_gui_test_home";
+  std::filesystem::remove_all(temp_home);
+  std::filesystem::create_directories(temp_home);
+  setenv("HOME", temp_home.c_str(), 1);
+
+  {
+    vamiga::Defaults defaults;
+    auto api = std::make_unique<vamiga::DefaultsAPI>(&defaults);
+    gui::ConfigProvider provider(*api);
+    provider.SetString(gui::ConfigKeys::kKickstartPath, "/tmp/kick.rom");
+    provider.SetInt(gui::ConfigKeys::kAudioVolume, 77);
+    provider.Save();
+  }
+
+  {
+    vamiga::Defaults defaults;
+    auto api = std::make_unique<vamiga::DefaultsAPI>(&defaults);
+    gui::ConfigProvider provider(*api);
+    provider.Load();
+    EXPECT_EQ(provider.GetString(gui::ConfigKeys::kKickstartPath), "/tmp/kick.rom");
+    EXPECT_EQ(provider.GetInt(gui::ConfigKeys::kAudioVolume, 0), 77);
+  }
+
+  std::filesystem::remove_all(temp_home);
 }
