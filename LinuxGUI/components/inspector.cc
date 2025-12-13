@@ -312,23 +312,106 @@ void Inspector::DrawMemory(vamiga::VAmiga& emu) {
   }
 }
 void Inspector::DrawAgnus(vamiga::VAmiga& emu) {
-  auto info = emu.agnus.getInfo();
-  if (ImGui::BeginTable("AgnusRegs", 2)) {
+  auto info = emu.isRunning() ? emu.agnus.getCachedInfo() : emu.agnus.getInfo();
+  ImGui::Text("VPOS: %d  HPOS: %d", info.vpos, info.hpos);
+  ImGui::Separator();
+
+  const int dmacon = info.dmacon;
+  const int bplcon0 = info.bplcon0;
+  const int bltcon0 = info.bltcon0;
+
+  ImGui::Text("DMA Control");
+  DrawRegister("DMACON", dmacon, 16);
+  DrawBit("BltPri", dmacon & 0x0400);
+  DrawBit("DMAEN", dmacon & 0x0200);
+  DrawBit("BPLEN", dmacon & 0x0100);
+  DrawBit("COPEN", dmacon & 0x0080);
+  DrawBit("BLTEN", dmacon & 0x0040);
+  DrawBit("SPREN", dmacon & 0x0020);
+  DrawBit("DSKEN", dmacon & 0x0010);
+  DrawBit("AUD3EN", dmacon & 0x0008);
+  DrawBit("AUD2EN", dmacon & 0x0004);
+  DrawBit("AUD1EN", dmacon & 0x0002);
+  DrawBit("AUD0EN", dmacon & 0x0001);
+
+  ImGui::Separator();
+  ImGui::Text("BPLCON0 / Display Windows");
+  DrawRegister("BPLCON0", bplcon0, 16);
+  DrawRegister("DIWSTRT", info.diwstrt, 16);
+  DrawRegister("DIWSTOP", info.diwstop, 16);
+  DrawRegister("DDFSTRT", info.ddfstrt, 16);
+  DrawRegister("DDFSTOP", info.ddfstop, 16);
+
+  ImGui::Separator();
+  ImGui::Text("Blitter Mods");
+  if (ImGui::BeginTable("AgnusBltMods", 2, ImGuiTableFlags_BordersInnerV)) {
     ImGui::TableNextRow();
     ImGui::TableSetColumnIndex(0);
-    DrawRegister("DMACON", info.dmacon, 16);
-    DrawRegister("DDFSTRT", info.ddfstrt, 16);
-    DrawRegister("DDFSTOP", info.ddfstop, 16);
+    DrawRegister("BLTAMOD", info.bltamod, 16);
+    DrawRegister("BLTBMOD", info.bltbmod, 16);
     ImGui::TableSetColumnIndex(1);
-    ImGui::Text("DMA Channels"); ImGui::Separator();
-    DrawBit("BLIT", info.dmacon & 0x0040);
-    DrawBit("COP", info.dmacon & 0x0080);
-    DrawBit("BPL", info.dmacon & 0x0100);
-    DrawBit("SPR", info.dmacon & 0x0020);
-    DrawBit("DSK", info.dmacon & 0x0010);
-    DrawBit("AUD", (info.dmacon & 0x000F));
+    DrawRegister("BLTCMOD", info.bltcmod, 16);
+    DrawRegister("BLTDMOD", info.bltdmod, 16);
     ImGui::EndTable();
   }
+
+  ImGui::Separator();
+  ImGui::Text("Bitplane Mods");
+  DrawRegister("BPL1MOD", info.bpl1mod, 16);
+  DrawRegister("BPL2MOD", info.bpl2mod, 16);
+
+  ImGui::Separator();
+  ImGui::Text("Pointers");
+  if (ImGui::BeginTable("AgnusPtrs", 3, ImGuiTableFlags_BordersInnerV)) {
+    ImGui::TableNextRow();
+    ImGui::TableSetColumnIndex(0);
+    DrawRegister("BPL1PT", info.bplpt[0]);
+    DrawRegister("BPL2PT", info.bplpt[1]);
+    DrawRegister("BPL3PT", info.bplpt[2]);
+    ImGui::TableSetColumnIndex(1);
+    DrawRegister("BPL4PT", info.bplpt[3]);
+    DrawRegister("BPL5PT", info.bplpt[4]);
+    DrawRegister("BPL6PT", info.bplpt[5]);
+    ImGui::TableSetColumnIndex(2);
+    DrawRegister("AUD0PT", info.audpt[0]);
+    DrawRegister("AUD1PT", info.audpt[1]);
+    DrawRegister("AUD2PT", info.audpt[2]);
+    DrawRegister("AUD3PT", info.audpt[3]);
+    ImGui::EndTable();
+  }
+
+  ImGui::Separator();
+  if (ImGui::BeginTable("AgnusPtrs2", 2, ImGuiTableFlags_BordersInnerV)) {
+    ImGui::TableNextRow();
+    ImGui::TableSetColumnIndex(0);
+    DrawRegister("BLTAPT", info.bltpt[0]);
+    DrawRegister("BLTBPT", info.bltpt[1]);
+    DrawRegister("BLTCPT", info.bltpt[2]);
+    DrawRegister("BLTDPT", info.bltpt[3]);
+    DrawRegister("COPPC", info.coppc0, 24);
+    ImGui::TableSetColumnIndex(1);
+    DrawRegister("SPR0PT", info.sprpt[0]);
+    DrawRegister("SPR1PT", info.sprpt[1]);
+    DrawRegister("SPR2PT", info.sprpt[2]);
+    DrawRegister("SPR3PT", info.sprpt[3]);
+    DrawRegister("SPR4PT", info.sprpt[4]);
+    DrawRegister("SPR5PT", info.sprpt[5]);
+    DrawRegister("SPR6PT", info.sprpt[6]);
+    DrawRegister("SPR7PT", info.sprpt[7]);
+    DrawRegister("DSKPT", info.dskpt);
+    ImGui::EndTable();
+  }
+
+  ImGui::Separator();
+  ImGui::Text("Bitplane Enables / BLS");
+  const int bpu = (bplcon0 >> 12) & 0x7;
+  DrawBit("BPL1", (dmacon & 0x0100) && bpu >= 1);
+  DrawBit("BPL2", (dmacon & 0x0100) && bpu >= 2);
+  DrawBit("BPL3", (dmacon & 0x0100) && bpu >= 3);
+  DrawBit("BPL4", (dmacon & 0x0100) && bpu >= 4);
+  DrawBit("BPL5", (dmacon & 0x0100) && bpu >= 5);
+  DrawBit("BPL6", (dmacon & 0x0100) && bpu >= 6);
+  DrawBit("BLS", info.bls);
 }
 void Inspector::DrawDenise(vamiga::VAmiga& emu) {
   auto info = emu.denise.getInfo();
