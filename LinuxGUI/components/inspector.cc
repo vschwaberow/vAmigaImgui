@@ -313,12 +313,12 @@ void Inspector::DrawMemory(vamiga::VAmiga& emu) {
 }
 void Inspector::DrawAgnus(vamiga::VAmiga& emu) {
   auto info = emu.isRunning() ? emu.agnus.getCachedInfo() : emu.agnus.getInfo();
-  ImGui::Text("VPOS: %d  HPOS: %d", info.vpos, info.hpos);
+  ImGui::Text("VPOS: %ld  HPOS: %ld",
+              static_cast<long>(info.vpos), static_cast<long>(info.hpos));
   ImGui::Separator();
 
   const int dmacon = info.dmacon;
   const int bplcon0 = info.bplcon0;
-  const int bltcon0 = info.bltcon0;
 
   ImGui::Text("DMA Control");
   DrawRegister("DMACON", dmacon, 16);
