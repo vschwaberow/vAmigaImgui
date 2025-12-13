@@ -5,6 +5,9 @@
 #include <cstdio>
 #include <format>
 #include <bitset>
+#include <map>
+#include <array>
+#include <string_view>
 #include <optional>
 #include <ranges>
 #include "Components/Agnus/AgnusTypes.h"
@@ -73,21 +76,22 @@ void Inspector::DrawToolbar(vamiga::VAmiga& emu) {
   ImGui::PopStyleVar();
   ImGui::Separator();
 }
-void Inspector::DrawHexDump(vamiga::VAmiga& emu, uint32_t addr, int rows) {
+void Inspector::DrawHexDump(vamiga::VAmiga& emu, uint32_t addr, int rows,
+                            vamiga::Accessor accessor) {
   ImGui::BeginChild("HexDump", ImVec2(0, rows * ImGui::GetTextLineHeightWithSpacing()));
   for (int r : std::views::iota(0, rows)) {
     uint32_t row_addr = addr + (r * 16);
     ImGui::TextColored(ImVec4(0.8f, 0.8f, 0.8f, 1.0f), "%08X: ", row_addr);
     for (int c : std::views::iota(0, 16)) {
       ImGui::SameLine();
-      uint8_t val = emu.mem.debugger.spypeek8(vamiga::Accessor::CPU, row_addr + c);
+      uint8_t val = emu.mem.debugger.spypeek8(accessor, row_addr + c);
       if (hex_mode_) ImGui::Text("%02X", val); else ImGui::Text("%3u", val);
     }
     ImGui::SameLine();
     ImGui::Text(" ");
     for (int c : std::views::iota(0, 16)) {
       ImGui::SameLine();
-      uint8_t val = emu.mem.debugger.spypeek8(vamiga::Accessor::CPU, row_addr + c);
+      uint8_t val = emu.mem.debugger.spypeek8(accessor, row_addr + c);
       if (val >= 32 && val < 127) ImGui::Text("%c", static_cast<char>(val)); else ImGui::TextDisabled(".");
     }
   }
@@ -260,54 +264,211 @@ void Inspector::DrawBreakpoints(vamiga::VAmiga& emu) {
     ImGui::EndTable();
   }
 }
-void Inspector::DrawMemoryMap(vamiga::VAmiga& emu) {
-  ImGui::Text("Bank Map");
-  if (ImGui::BeginTable("MemMap", 2, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY, ImVec2(0, 0))) {
-    ImGui::TableSetupColumn("Bank", ImGuiTableColumnFlags_WidthFixed, 40);
-    ImGui::TableSetupColumn("Type", ImGuiTableColumnFlags_WidthStretch);
-    ImGui::TableHeadersRow();
-    auto info = emu.mem.getInfo();
-    for (int i : std::views::iota(0, 256)) {
+void Inspector::DrawMemoryMap(const vamiga::MemInfo& info, vamiga::Accessor accessor) {
+  const auto* src_table = accessor == vamiga::Accessor::AGNUS ? info.agnusMemSrc : info.cpuMemSrc;
+
+  auto color_for = [](vamiga::MemSrc src) -> ImVec4 {
+    switch (src) {
+      case vamiga::MemSrc::CHIP: return {0.25f, 0.55f, 1.0f, 0.9f};
+      case vamiga::MemSrc::CHIP_MIRROR: return {0.25f, 0.55f, 1.0f, 0.4f};
+      case vamiga::MemSrc::SLOW: return {0.32f, 0.78f, 0.46f, 0.9f};
+      case vamiga::MemSrc::SLOW_MIRROR: return {0.32f, 0.78f, 0.46f, 0.4f};
+      case vamiga::MemSrc::FAST: return {0.75f, 0.46f, 0.96f, 0.9f};
+      case vamiga::MemSrc::CIA: return {0.93f, 0.76f, 0.32f, 0.9f};
+      case vamiga::MemSrc::CIA_MIRROR: return {0.93f, 0.76f, 0.32f, 0.5f};
+      case vamiga::MemSrc::RTC: return {0.96f, 0.58f, 0.58f, 0.9f};
+      case vamiga::MemSrc::CUSTOM: return {0.94f, 0.33f, 0.33f, 0.9f};
+      case vamiga::MemSrc::CUSTOM_MIRROR: return {0.94f, 0.33f, 0.33f, 0.5f};
+      case vamiga::MemSrc::AUTOCONF: return {0.56f, 0.56f, 0.56f, 0.9f};
+      case vamiga::MemSrc::ZOR: return {0.54f, 0.38f, 0.72f, 0.9f};
+      case vamiga::MemSrc::ROM: return {0.98f, 0.52f, 0.18f, 0.9f};
+      case vamiga::MemSrc::ROM_MIRROR: return {0.98f, 0.52f, 0.18f, 0.5f};
+      case vamiga::MemSrc::WOM: return {0.70f, 0.70f, 0.70f, 0.9f};
+      case vamiga::MemSrc::EXT: return {0.29f, 0.77f, 0.77f, 0.9f};
+      case vamiga::MemSrc::NONE: return {0.18f, 0.18f, 0.18f, 0.9f};
+    }
+    return {0.18f, 0.18f, 0.18f, 0.9f};
+  };
+
+  auto brighten = [](ImVec4 col, float factor) {
+    col.x = std::min(col.x * factor, 1.0f);
+    col.y = std::min(col.y * factor, 1.0f);
+    col.z = std::min(col.z * factor, 1.0f);
+    return col;
+  };
+
+  std::array<bool, static_cast<size_t>(vamiga::MemSrc::EXT) + 1> present{};
+  for (int i : std::views::iota(0, 256)) {
+    auto idx = static_cast<size_t>(src_table[i]);
+    if (idx < present.size()) present[idx] = true;
+  }
+
+  ImGui::Text("Bank Layout (%s)", accessor == vamiga::Accessor::AGNUS ? "Agnus" : "CPU");
+  ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(3, 2));
+  const ImVec2 cell_size(22.0f, 20.0f);
+  for (int row : std::views::iota(0, 8)) {
+    for (int col : std::views::iota(0, 32)) {
+      int bank = row * 32 + col;
+      auto src = src_table[bank];
+      auto base_col = color_for(src);
+      ImGui::PushID(bank);
+      ImGui::PushStyleColor(ImGuiCol_Button, base_col);
+      ImGui::PushStyleColor(ImGuiCol_ButtonHovered, brighten(base_col, 1.2f));
+      ImGui::PushStyleColor(ImGuiCol_ButtonActive, brighten(base_col, 1.3f));
+      const std::string label = std::format("{:02X}", bank);
+      if (ImGui::Button(label.c_str(), cell_size)) {
+        mem_selected_bank_ = bank;
+        mem_addr_ = static_cast<uint32_t>(bank) << 16;
+      }
+      if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("%s", vamiga::MemSrcEnum::help(src));
+      }
+      if (bank == mem_selected_bank_) {
+        auto* dl = ImGui::GetWindowDrawList();
+        dl->AddRect(ImGui::GetItemRectMin(), ImGui::GetItemRectMax(),
+                    ImGui::GetColorU32(ImVec4(1.0f, 1.0f, 1.0f, 1.0f)), 2.0f, 0, 2.0f);
+      }
+      ImGui::PopStyleColor(3);
+      ImGui::PopID();
+      if (col != 31) ImGui::SameLine(0.0f, 2.0f);
+    }
+  }
+  ImGui::PopStyleVar();
+
+  ImGui::Spacing();
+  if (ImGui::BeginTable("MemLegend", 2, ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerV)) {
+    ImGui::TableSetupColumn("Color", ImGuiTableColumnFlags_WidthFixed, 24.0f);
+    ImGui::TableSetupColumn("Region", ImGuiTableColumnFlags_WidthStretch);
+    const std::array legend_sources = {
+      vamiga::MemSrc::CHIP, vamiga::MemSrc::CHIP_MIRROR, vamiga::MemSrc::SLOW, vamiga::MemSrc::SLOW_MIRROR,
+      vamiga::MemSrc::FAST, vamiga::MemSrc::CIA, vamiga::MemSrc::CIA_MIRROR, vamiga::MemSrc::RTC,
+      vamiga::MemSrc::CUSTOM, vamiga::MemSrc::CUSTOM_MIRROR, vamiga::MemSrc::AUTOCONF, vamiga::MemSrc::ZOR,
+      vamiga::MemSrc::ROM, vamiga::MemSrc::ROM_MIRROR, vamiga::MemSrc::WOM, vamiga::MemSrc::EXT
+    };
+    for (auto src : legend_sources) {
+      auto idx = static_cast<size_t>(src);
+      if (idx >= present.size() || !present[idx]) continue;
       ImGui::TableNextRow();
       ImGui::TableSetColumnIndex(0);
-      std::string label = std::format("{:02X}", i);
-      if (ImGui::Selectable(label.c_str(), (mem_addr_ >> 16) == i, ImGuiSelectableFlags_SpanAllColumns)) {
-        mem_addr_ = i << 16;
-      }
+      ImGui::ColorButton("##color", color_for(src),
+                         ImGuiColorEditFlags_NoTooltip | ImGuiColorEditFlags_NoDragDrop,
+                         ImVec2(18, 18));
       ImGui::TableSetColumnIndex(1);
-      ImGui::Text("%s", vamiga::MemSrcEnum::help(info.cpuMemSrc[i]));
+      ImGui::Text("%s", vamiga::MemSrcEnum::help(src));
     }
     ImGui::EndTable();
   }
 }
 void Inspector::DrawMemory(vamiga::VAmiga& emu) {
-  if (ImGui::BeginTable("MemLayout", 2, ImGuiTableFlags_Resizable | ImGuiTableFlags_BordersInnerV)) {
-    ImGui::TableSetupColumn("HexDump", ImGuiTableColumnFlags_WidthStretch, 0.6f);
-    ImGui::TableSetupColumn("BankMap", ImGuiTableColumnFlags_WidthStretch, 0.4f);
+  const bool running = emu.isRunning();
+  const auto& info = running ? emu.mem.getCachedInfo() : emu.mem.getInfo();
+  const auto& config = emu.mem.getConfig();
+
+  mem_selected_bank_ = std::clamp(mem_selected_bank_, 0, 255);
+  mem_rows_ = std::clamp(mem_rows_, 8, 32);
+  mem_addr_ = std::min(mem_addr_, 0xFFFFFFu);
+
+  if (ImGui::RadioButton("CPU", mem_accessor_ == 0)) mem_accessor_ = 0;
+  ImGui::SameLine();
+  if (ImGui::RadioButton("Agnus", mem_accessor_ == 1)) mem_accessor_ = 1;
+  auto accessor = mem_accessor_ == 1 ? vamiga::Accessor::AGNUS : vamiga::Accessor::CPU;
+  const auto* src_table = accessor == vamiga::Accessor::AGNUS ? info.agnusMemSrc : info.cpuMemSrc;
+
+  auto sync_address = [&]() {
+    mem_selected_bank_ = std::clamp(mem_selected_bank_, 0, 255);
+    const uint32_t start = static_cast<uint32_t>(mem_selected_bank_) << 16;
+    if (mem_addr_ < start || mem_addr_ >= start + 0x10000) {
+      mem_addr_ = start;
+    }
+    return start;
+  };
+  sync_address();
+
+  ImGui::SameLine(0.0f, 20.0f);
+  ImGui::Text("Chip %d KB  Slow %d KB  Fast %d KB  ROM %d KB  WOM %d KB  EXT %d KB",
+              config.chipSize / 1024, config.slowSize / 1024, config.fastSize / 1024,
+              config.romSize / 1024, config.womSize / 1024, config.extSize / 1024);
+
+  ImGui::Separator();
+
+  int bank_slider = mem_selected_bank_;
+  if (ImGui::SliderInt("Bank", &bank_slider, 0, 255, "%02X")) {
+    mem_selected_bank_ = bank_slider;
+    mem_addr_ = static_cast<uint32_t>(mem_selected_bank_) << 16;
+    sync_address();
+  }
+
+  std::map<vamiga::MemSrc, int> first_bank;
+  for (int i : std::views::iota(0, 256)) {
+    auto src = src_table[i];
+    if (src == vamiga::MemSrc::NONE) continue;
+    if (!first_bank.contains(src)) first_bank[src] = i;
+  }
+  const char* src_label = vamiga::MemSrcEnum::help(src_table[mem_selected_bank_]);
+  ImGui::SetNextItemWidth(200.0f);
+  if (ImGui::BeginCombo("Jump to source", src_label)) {
+    for (const auto& [src, bank] : first_bank) {
+      const bool selected = bank == mem_selected_bank_;
+      if (ImGui::Selectable(std::format("{} {:02X}", vamiga::MemSrcEnum::help(src), bank).c_str(), selected)) {
+        mem_selected_bank_ = bank;
+        mem_addr_ = static_cast<uint32_t>(bank) << 16;
+        sync_address();
+      }
+    }
+    ImGui::EndCombo();
+  }
+
+  uint32_t bank_start = sync_address();
+  uint32_t address_value = mem_addr_;
+  ImGui::SetNextItemWidth(140.0f);
+  if (ImGui::InputScalar("Address", ImGuiDataType_U32, &address_value, nullptr, nullptr,
+                         "%08X", ImGuiInputTextFlags_CharsHexadecimal)) {
+    mem_addr_ = std::min(address_value, 0xFFFFFFu);
+    mem_selected_bank_ = static_cast<int>(mem_addr_ >> 16);
+    bank_start = sync_address();
+  }
+  ImGui::SameLine();
+  if (ImGui::Button("Bank start")) {
+    mem_addr_ = bank_start;
+  }
+  bank_start = sync_address();
+  ImGui::SameLine();
+  ImGui::SetNextItemWidth(140.0f);
+  if (ImGui::InputText("Find 16-bit", mem_search_buf_, sizeof(mem_search_buf_),
+                       ImGuiInputTextFlags_CharsHexadecimal | ImGuiInputTextFlags_EnterReturnsTrue)) {
+    uint32_t search_val = 0;
+    auto res = std::from_chars(mem_search_buf_, mem_search_buf_ + sizeof(mem_search_buf_), search_val, 16);
+    if (res.ec == std::errc()) {
+      for (uint32_t offset = 0; offset < 0x10000; offset += 2) {
+        if (emu.mem.debugger.spypeek16(accessor, bank_start + offset) == search_val) {
+          mem_addr_ = bank_start + offset;
+          break;
+        }
+      }
+    }
+  }
+
+  ImGui::SameLine();
+  ImGui::SetNextItemWidth(120.0f);
+  ImGui::SliderInt("Rows", &mem_rows_, 8, 32);
+
+  if (ImGui::BeginTable("MemLayout", 2, ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_BordersInnerV)) {
+    ImGui::TableSetupColumn("Layout", ImGuiTableColumnFlags_WidthStretch, 0.5f);
+    ImGui::TableSetupColumn("Hex", ImGuiTableColumnFlags_WidthStretch, 0.5f);
     ImGui::TableNextRow();
     ImGui::TableSetColumnIndex(0);
-    static char buf[16] = "";
-    ImGui::SetNextItemWidth(100);
-    if (ImGui::InputText("Address", buf, 16, ImGuiInputTextFlags_CharsHexadecimal | ImGuiInputTextFlags_EnterReturnsTrue)) {
-      std::from_chars(buf, buf + 16, mem_addr_, 16);
-    }
-    ImGui::SameLine();
-    if (ImGui::Button("Go")) std::from_chars(buf, buf + 16, mem_addr_, 16);
-    ImGui::SameLine();
-    ImGui::SetNextItemWidth(100);
-    if (ImGui::InputText("Find 16-bit", mem_search_buf_, 16, ImGuiInputTextFlags_CharsHexadecimal | ImGuiInputTextFlags_EnterReturnsTrue)) {
-        uint32_t search_val = 0;
-        std::from_chars(mem_search_buf_, mem_search_buf_ + 16, search_val, 16);
-        for(uint32_t offset = 0; offset < 0x10000; offset+=2) {
-             if (emu.mem.debugger.spypeek16(vamiga::Accessor::CPU, mem_addr_ + offset) == search_val) {
-                 mem_addr_ += offset;
-                 break;
-             }
-         }
-    }
-    DrawHexDump(emu, mem_addr_, 25);
+    DrawMemoryMap(info, accessor);
     ImGui::TableSetColumnIndex(1);
-    DrawMemoryMap(emu);
+    bank_start = sync_address();
+    ImGui::Text("Bank %02X (%s)  Offset: +0x%04X", mem_selected_bank_,
+                vamiga::MemSrcEnum::help(src_table[mem_selected_bank_]),
+                static_cast<unsigned>(mem_addr_ - bank_start));
+    ImGui::Text("Offset within bank");
+    int offset = static_cast<int>(mem_addr_ - bank_start);
+    if (ImGui::SliderInt("##offset", &offset, 0, 0xFFFF)) {
+      mem_addr_ = bank_start + static_cast<uint32_t>(offset);
+    }
+    DrawHexDump(emu, mem_addr_, mem_rows_, accessor);
     ImGui::EndTable();
   }
 }
