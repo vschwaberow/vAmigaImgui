@@ -7,6 +7,7 @@
 #include <bitset>
 #include <map>
 #include <array>
+#include <string>
 #include <string_view>
 #include <optional>
 #include <ranges>
@@ -27,6 +28,90 @@ Inspector& Inspector::Instance() {
   return instance;
 }
 Inspector::Inspector() {}
+
+void Inspector::OpenWindow() {
+  windows_.push_back(WindowState{.open = true, .id = next_id_++, .active_tab = Tab::kCPU});
+}
+
+void Inspector::DrawAll(bool* primary_toggle, vamiga::VAmiga& emu) {
+  if (primary_toggle) {
+    if (*primary_toggle && !windows_.empty()) windows_[0].open = true;
+    if (!*primary_toggle && !windows_.empty()) windows_[0].open = false;
+  }
+
+  bool any_open = false;
+  for (auto& w : windows_) {
+    if (w.open) {
+      any_open = true;
+      DrawWindow(w, emu);
+    }
+  }
+
+  if (!any_open && emu.isTracking()) {
+    emu.trackOff();
+  }
+
+  if (windows_.size() > 1) {
+    windows_.erase(std::remove_if(windows_.begin() + 1, windows_.end(),
+                                  [](const WindowState& w) { return !w.open; }),
+                   windows_.end());
+  }
+  if (windows_.empty()) {
+    windows_.push_back(WindowState{.open = primary_toggle ? *primary_toggle : true,
+                                   .id = next_id_++, .active_tab = Tab::kCPU});
+  }
+  if (primary_toggle && !windows_.empty()) {
+    *primary_toggle = windows_[0].open;
+  }
+}
+
+void Inspector::DrawWindow(WindowState& state, vamiga::VAmiga& emu) {
+  ImGui::SetNextWindowSize(ImVec2(800, 600), ImGuiCond_FirstUseEver);
+  std::string title = std::format(ICON_FA_MAGNIFYING_GLASS " Inspector {}", state.id);
+  if (ImGui::Begin(title.c_str(), &state.open)) {
+    if (!emu.isTracking()) emu.trackOn();
+    DrawToolbar(emu, state);
+    std::string tab_id = std::format("InspectorTabs{}", state.id);
+    if (ImGui::BeginTabBar(tab_id.c_str())) {
+      auto tab_item = [&](Tab tab, const char* label) {
+        ImGuiTabItemFlags flags = (state.active_tab == tab) ? ImGuiTabItemFlags_SetSelected : 0;
+        if (ImGui::BeginTabItem(label, nullptr, flags)) {
+          state.active_tab = tab;
+          switch (tab) {
+            case Tab::kCPU: DrawCPU(emu); break;
+            case Tab::kMemory: DrawMemory(emu); break;
+            case Tab::kAgnus: DrawAgnus(emu); break;
+            case Tab::kDenise: DrawDenise(emu); break;
+            case Tab::kPaula: DrawPaula(emu); break;
+            case Tab::kCIA: DrawCIA(emu); break;
+            case Tab::kCopper: DrawCopper(emu); break;
+            case Tab::kBlitter: DrawBlitter(emu); break;
+            case Tab::kEvents: DrawEvents(emu); break;
+            case Tab::kPorts: DrawPorts(emu); break;
+            case Tab::kBus: LogicAnalyzer::Instance().Draw(emu); break;
+            case Tab::kNone: break;
+          }
+          ImGui::EndTabItem();
+        }
+      };
+      tab_item(Tab::kCPU, "CPU");
+      tab_item(Tab::kMemory, "Memory");
+      tab_item(Tab::kAgnus, "Agnus");
+      tab_item(Tab::kDenise, "Denise");
+      tab_item(Tab::kPaula, "Paula");
+      tab_item(Tab::kCIA, "CIA");
+      tab_item(Tab::kCopper, "Copper");
+      tab_item(Tab::kBlitter, "Blitter");
+      tab_item(Tab::kEvents, "Events");
+      tab_item(Tab::kPorts, "Ports");
+      tab_item(Tab::kBus, "Bus");
+      ImGui::EndTabBar();
+    }
+  } else {
+    if (emu.isTracking()) emu.trackOff();
+  }
+  ImGui::End();
+}
 void Inspector::DrawRegister(std::string_view label, uint32_t val, int width) {
   ImGui::Text("%s:", label.data());
   ImGui::SameLine();
@@ -49,7 +134,7 @@ void Inspector::DrawBit(std::string_view label, bool set) {
     ImGui::PopStyleColor();
   }
 }
-void Inspector::DrawToolbar(vamiga::VAmiga& emu) {
+void Inspector::DrawToolbar(vamiga::VAmiga& emu, WindowState& state) {
   ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(8, 0));
   if (ImGui::Button(emu.isRunning() ? ICON_FA_PAUSE : ICON_FA_PLAY)) {
     if (emu.isRunning()) emu.pause(); else emu.run();
@@ -70,6 +155,38 @@ void Inspector::DrawToolbar(vamiga::VAmiga& emu) {
   ImGui::SameLine(0, 20);
   if (ImGui::Button(hex_mode_ ? "HEX" : "DEC")) hex_mode_ = !hex_mode_;
   ImGui::SetItemTooltip("Toggle Hex/Dec");
+  ImGui::SameLine(0, 20);
+  if (ImGui::Button(ICON_FA_PLUS " New")) {
+    OpenWindow();
+  }
+  ImGui::SameLine();
+  constexpr std::array presets = {
+      "CPU","Memory","Agnus","Denise","Paula","CIA","Copper","Blitter","Events","Ports","Bus"};
+  int preset_idx = -1;
+  if (ImGui::Combo(
+          "Preset", &preset_idx,
+          [](void* data, int idx, const char** out_text) {
+            auto* arr = static_cast<const std::array<const char*,11>*>(data);
+            if (idx < 0 || idx >= static_cast<int>(arr->size())) return false;
+            *out_text = (*arr)[static_cast<size_t>(idx)];
+            return true;
+          },
+          (void*)&presets, static_cast<int>(presets.size()))) {
+    switch (preset_idx) {
+      case 0: state.active_tab = Tab::kCPU; break;
+      case 1: state.active_tab = Tab::kMemory; break;
+      case 2: state.active_tab = Tab::kAgnus; break;
+      case 3: state.active_tab = Tab::kDenise; break;
+      case 4: state.active_tab = Tab::kPaula; break;
+      case 5: state.active_tab = Tab::kCIA; break;
+      case 6: state.active_tab = Tab::kCopper; break;
+      case 7: state.active_tab = Tab::kBlitter; break;
+      case 8: state.active_tab = Tab::kEvents; break;
+      case 9: state.active_tab = Tab::kPorts; break;
+      case 10: state.active_tab = Tab::kBus; break;
+      default: break;
+    }
+  }
   ImGui::SameLine(0, 20);
   auto agnus = emu.agnus.getInfo();
   ImGui::TextDisabled("V:%03ld H:%03ld", agnus.vpos, agnus.hpos);
@@ -1359,24 +1476,75 @@ void Inspector::DrawPorts(vamiga::VAmiga& emu) {
       ImGui::EndTable();
   }
 }
-void Inspector::Draw(bool* p_open, vamiga::VAmiga& emu) {
-  if (!p_open || !*p_open) return;
+void Inspector::OpenWindow() {
+  windows_.push_back(WindowState{.open = true, .id = next_id_++, .active_tab = Tab::kCPU});
+}
+
+void Inspector::DrawAll(bool* primary_toggle, vamiga::VAmiga& emu) {
+  if (primary_toggle) {
+    if (*primary_toggle && !windows_.empty()) windows_[0].open = true;
+    if (!*primary_toggle && !windows_.empty()) windows_[0].open = false;
+  }
+
+  for (auto& w : windows_) {
+    if (w.open) DrawWindow(w, emu);
+  }
+
+  // Drop closed windows except keep first in vector.
+  if (windows_.size() > 1) {
+    windows_.erase(std::remove_if(windows_.begin() + 1, windows_.end(),
+                                  [](const WindowState& w) { return !w.open; }),
+                   windows_.end());
+  }
+  if (windows_.empty()) {
+    windows_.push_back(WindowState{.open = primary_toggle ? *primary_toggle : true,
+                                   .id = next_id_++, .active_tab = Tab::kCPU});
+  }
+  if (primary_toggle && !windows_.empty()) {
+    *primary_toggle = windows_[0].open;
+  }
+}
+
+void Inspector::DrawWindow(WindowState& state, vamiga::VAmiga& emu) {
   ImGui::SetNextWindowSize(ImVec2(800, 600), ImGuiCond_FirstUseEver);
-  if (ImGui::Begin(ICON_FA_MAGNIFYING_GLASS " Inspector", p_open)) {
+  std::string title = std::format(ICON_FA_MAGNIFYING_GLASS " Inspector {}", state.id);
+  if (ImGui::Begin(title.c_str(), &state.open)) {
     if (!emu.isTracking()) emu.trackOn();
-    DrawToolbar(emu);
-    if (ImGui::BeginTabBar("InspectorTabs")) {
-      if (ImGui::BeginTabItem("CPU")) { DrawCPU(emu); ImGui::EndTabItem(); }
-      if (ImGui::BeginTabItem("Memory")) { DrawMemory(emu); ImGui::EndTabItem(); }
-      if (ImGui::BeginTabItem("Agnus")) { DrawAgnus(emu); ImGui::EndTabItem(); }
-      if (ImGui::BeginTabItem("Denise")) { DrawDenise(emu); ImGui::EndTabItem(); }
-      if (ImGui::BeginTabItem("Paula")) { DrawPaula(emu); ImGui::EndTabItem(); }
-      if (ImGui::BeginTabItem("CIA")) { DrawCIA(emu); ImGui::EndTabItem(); }
-      if (ImGui::BeginTabItem("Copper")) { DrawCopper(emu); ImGui::EndTabItem(); }
-      if (ImGui::BeginTabItem("Blitter")) { DrawBlitter(emu); ImGui::EndTabItem(); }
-      if (ImGui::BeginTabItem("Events")) { DrawEvents(emu); ImGui::EndTabItem(); }
-      if (ImGui::BeginTabItem("Ports")) { DrawPorts(emu); ImGui::EndTabItem(); }
-      if (ImGui::BeginTabItem("Bus")) { LogicAnalyzer::Instance().Draw(emu); ImGui::EndTabItem(); }
+    DrawToolbar(emu, state);
+    std::string tab_id = std::format("InspectorTabs{}", state.id);
+    if (ImGui::BeginTabBar(tab_id.c_str())) {
+      auto tab_item = [&](Tab tab, const char* label) {
+        ImGuiTabItemFlags flags = (state.active_tab == tab) ? ImGuiTabItemFlags_SetSelected : 0;
+        if (ImGui::BeginTabItem(label, nullptr, flags)) {
+          state.active_tab = tab;
+          switch (tab) {
+            case Tab::kCPU: DrawCPU(emu); break;
+            case Tab::kMemory: DrawMemory(emu); break;
+            case Tab::kAgnus: DrawAgnus(emu); break;
+            case Tab::kDenise: DrawDenise(emu); break;
+            case Tab::kPaula: DrawPaula(emu); break;
+            case Tab::kCIA: DrawCIA(emu); break;
+            case Tab::kCopper: DrawCopper(emu); break;
+            case Tab::kBlitter: DrawBlitter(emu); break;
+            case Tab::kEvents: DrawEvents(emu); break;
+            case Tab::kPorts: DrawPorts(emu); break;
+            case Tab::kBus: LogicAnalyzer::Instance().Draw(emu); break;
+            case Tab::kNone: break;
+          }
+          ImGui::EndTabItem();
+        }
+      };
+      tab_item(Tab::kCPU, "CPU");
+      tab_item(Tab::kMemory, "Memory");
+      tab_item(Tab::kAgnus, "Agnus");
+      tab_item(Tab::kDenise, "Denise");
+      tab_item(Tab::kPaula, "Paula");
+      tab_item(Tab::kCIA, "CIA");
+      tab_item(Tab::kCopper, "Copper");
+      tab_item(Tab::kBlitter, "Blitter");
+      tab_item(Tab::kEvents, "Events");
+      tab_item(Tab::kPorts, "Ports");
+      tab_item(Tab::kBus, "Bus");
       ImGui::EndTabBar();
     }
   } else {
