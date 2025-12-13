@@ -28,6 +28,8 @@ struct DeviceDescriptor {
   std::string_view label;
 };
 
+Application* g_app_instance = nullptr;
+
 constexpr auto kDeviceDescriptors = std::to_array<DeviceDescriptor>({
     DeviceDescriptor{ICON_FA_BAN, "None"},
     DeviceDescriptor{ICON_FA_COMPUTER_MOUSE, "Mouse"},
