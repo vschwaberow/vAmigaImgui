@@ -6,6 +6,7 @@
 #include <string>
 #include <vector>
 
+#include <SDL.h>
 #include <utility>
 #include "VAmiga.h"
 #undef unreachable
@@ -17,6 +18,7 @@ class Console {
   static Console& Instance();
 
   void Draw(bool* p_open, vamiga::VAmiga& emu);
+  bool HandleEvent(const SDL_Event& event, vamiga::VAmiga& emu);
 
   template <typename... Args>
   void AddLog(std::format_string<Args...> fmt, Args&&... args) {
@@ -41,10 +43,12 @@ class Console {
 
   std::function<void(const std::string&)> command_callback_;
   std::string retro_shell_current_text_;
+
+  bool has_focus_ = false;
+  size_t last_text_size_ = 0;
 };
 
 }
 
 #endif
-
 
