@@ -702,18 +702,94 @@ void Inspector::DrawCopper(vamiga::VAmiga& emu) {
   DrawCopperBreakpoints(emu);
 }
 void Inspector::DrawBlitter(vamiga::VAmiga& emu) {
-  auto info = emu.agnus.getInfo();
-  if (ImGui::BeginTable("BlitRegs", 2)) {
+  auto info = emu.agnus.blitter.getInfo();
+  if (ImGui::BeginTable("BlitRegs", 2, ImGuiTableFlags_BordersInnerV)) {
     ImGui::TableNextRow();
     ImGui::TableSetColumnIndex(0);
     DrawRegister("BLTCON0", info.bltcon0, 16);
+    DrawRegister("BLTCON1", info.bltcon1, 16);
+    DrawBit("BBUSY", info.bbusy);
+    DrawBit("BZERO", info.bzero);
+    DrawBit("Use A", info.bltcon0 & 0x0800);
+    DrawBit("Use B", info.bltcon0 & 0x0400);
+    DrawBit("Use C", info.bltcon0 & 0x0200);
+    DrawBit("Use D", info.bltcon0 & 0x0100);
     ImGui::TableSetColumnIndex(1);
-    DrawRegister("BLTAPT", info.bltpt[0]);
-    DrawRegister("BLTBPT", info.bltpt[1]);
-    DrawRegister("BLTCPT", info.bltpt[2]);
-    DrawRegister("BLTDPT", info.bltpt[3]);
+    DrawRegister("BLTAPT", info.bltapt);
+    DrawRegister("BLTBPT", info.bltbpt);
+    DrawRegister("BLTCPT", info.bltcpt);
+    DrawRegister("BLTDPT", info.bltdpt);
+    DrawRegister("BLTAMOD", info.bltamod, 16);
+    DrawRegister("BLTBMOD", info.bltbmod, 16);
+    DrawRegister("BLTCMOD", info.bltcmod, 16);
+    DrawRegister("BLTDMOD", info.bltdmod, 16);
     ImGui::EndTable();
   }
+  ImGui::Separator();
+
+  ImGui::Text("Hold / New / Old");
+  if (ImGui::BeginTable("BlitHold", 4, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg)) {
+    ImGui::TableSetupColumn("A");
+    ImGui::TableSetupColumn("B");
+    ImGui::TableSetupColumn("C");
+    ImGui::TableSetupColumn("D");
+    ImGui::TableHeadersRow();
+    ImGui::TableNextRow();
+    ImGui::TableSetColumnIndex(0); DrawRegister("HOLD", info.ahold, 16);
+    ImGui::TableSetColumnIndex(1); DrawRegister("HOLD", info.bhold, 16);
+    ImGui::TableSetColumnIndex(2); DrawRegister("HOLD", info.chold, 16);
+    ImGui::TableSetColumnIndex(3); DrawRegister("HOLD", info.dhold, 16);
+    ImGui::TableNextRow();
+    ImGui::TableSetColumnIndex(0); DrawRegister("OLD", info.aold, 16);
+    ImGui::TableSetColumnIndex(1); DrawRegister("OLD", info.bold, 16);
+    ImGui::TableSetColumnIndex(0); DrawRegister("NEW", info.anew, 16);
+    ImGui::TableSetColumnIndex(1); DrawRegister("NEW", info.bnew, 16);
+    ImGui::EndTable();
+  }
+
+  ImGui::Separator();
+  ImGui::Text("Masks");
+  if (ImGui::BeginTable("BlitMasks", 2, ImGuiTableFlags_BordersInnerV)) {
+    ImGui::TableNextRow();
+    ImGui::TableSetColumnIndex(0);
+    DrawRegister("AFWM", info.bltafwm, 16);
+    DrawRegister("ALWM", info.bltalwm, 16);
+    DrawBit("First Word", info.firstWord);
+    DrawBit("Last Word", info.lastWord);
+    ImGui::TableSetColumnIndex(1);
+    DrawRegister("Mask In", info.anew, 16);
+    DrawRegister("Mask Out", info.aold, 16);
+    ImGui::EndTable();
+  }
+
+  ImGui::Separator();
+  ImGui::Text("Barrel Shifters");
+  if (ImGui::BeginTable("BlitBarrels", 2, ImGuiTableFlags_BordersInnerV)) {
+    ImGui::TableNextRow();
+    ImGui::TableSetColumnIndex(0);
+    DrawRegister("A In", info.barrelAin, 16);
+    DrawRegister("A Shift", info.ash, 4);
+    DrawRegister("A Out", info.barrelAout, 16);
+    ImGui::TableSetColumnIndex(1);
+    DrawRegister("B In", info.barrelBin, 16);
+    DrawRegister("B Shift", info.bsh, 4);
+    DrawRegister("B Out", info.barrelBout, 16);
+    ImGui::EndTable();
+  }
+
+  ImGui::Separator();
+  ImGui::Text("Fill");
+  DrawRegister("Fill In", info.fillIn, 16);
+  DrawRegister("Fill Out", info.fillOut, 16);
+  DrawBit("Fill Enable", info.fillEnable);
+  DrawBit("Store to Dest", info.storeToDest);
+
+  ImGui::Separator();
+  ImGui::Text("Logic Functions");
+  DrawRegister("Minterm", info.minterm, 8);
+  DrawRegister("MintermOut", info.mintermOut, 16);
+  DrawBit("FCI", info.fci);
+  DrawBit("FCO", info.fco);
 }
 void Inspector::DrawEvents(vamiga::VAmiga& emu) {
   auto info = emu.agnus.getInfo();
