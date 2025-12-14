@@ -60,6 +60,7 @@ target_sources(vAmigaLinux PRIVATE
     components/dashboard.cc
     components/disk_creator.cc
     components/disk_inspector.cc
+    components/volume_inspector.cc
     components/file_picker.cc
     components/input_manager.cc
     components/inspector.cc

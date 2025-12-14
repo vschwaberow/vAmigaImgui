@@ -6,7 +6,6 @@
 #include <vector>
 #include <utility>
 #include "VAmiga.h"
-#undef unreachable
 #include "Media/MediaFile.h"
 #include "imgui.h"
 

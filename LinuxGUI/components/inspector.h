@@ -5,15 +5,38 @@
 #include <utility>
 #include "VAmiga.h"
 #undef unreachable
+#define unreachable std::unreachable()
 #include "imgui.h"
 namespace gui {
 class Inspector {
  public:
   static Inspector& Instance();
-  void Draw(bool* p_open, vamiga::VAmiga& emu);
+  void DrawAll(bool* primary_toggle, vamiga::VAmiga& emu);
+  void OpenWindow();
  private:
   Inspector();
-  void DrawToolbar(vamiga::VAmiga& emu);
+  enum class Tab {
+    kCPU,
+    kMemory,
+    kAgnus,
+    kDenise,
+    kPaula,
+    kCIA,
+    kCopper,
+    kBlitter,
+    kEvents,
+    kPorts,
+    kBus,
+    kNone
+  };
+  struct WindowState {
+    bool open = true;
+    int id = 0;
+    Tab active_tab = Tab::kCPU;
+  };
+
+  void DrawWindow(WindowState& state, vamiga::VAmiga& emu);
+  void DrawToolbar(vamiga::VAmiga& emu, WindowState& state);
   void DrawCPU(vamiga::VAmiga& emu);
   void DrawTrace(vamiga::VAmiga& emu);
   void DrawBreakpoints(vamiga::VAmiga& emu);
@@ -51,6 +74,8 @@ class Inspector {
   int copper_extra_rows_[2] = {0, 0};
   int mem_accessor_ = 0;  // 0=CPU,1=Agnus
   int mem_selected_bank_ = 0;
+  std::vector<WindowState> windows_{{true, 1, Tab::kCPU}};
+  int next_id_ = 2;
 };
 }
 #endif

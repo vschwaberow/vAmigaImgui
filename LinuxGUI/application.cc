@@ -12,6 +12,7 @@
 #include "components/dashboard.h"
 #include "components/disk_creator.h"
 #include "components/disk_inspector.h"
+#include "components/volume_inspector.h"
 #include "components/file_picker.h"
 #include "components/inspector.h"
 #include "components/settings_window.h"
@@ -523,8 +524,7 @@ void Application::DrawGUI() {
           input_manager_->SetViewportHovered(false);
       }
   }
-  if (show_inspector_)
-    gui::Inspector::Instance().Draw(&show_inspector_, emulator_);
+  gui::Inspector::Instance().DrawAll(&show_inspector_, emulator_);
   if (show_dashboard_)
     gui::Dashboard::Instance().Draw(&show_dashboard_, emulator_);
   if (show_console_) gui::Console::Instance().Draw(&show_console_, emulator_);
@@ -532,6 +532,7 @@ void Application::DrawGUI() {
     gui::VirtualKeyboard::Instance().Draw(&show_keyboard_, emulator_);
   gui::DiskCreator::Instance().Draw(emulator_);
   gui::DiskInspector::Instance().Draw(emulator_);
+  gui::VolumeInspector::Instance().Draw(emulator_);
   gui::FilePicker::Instance().Draw();
 }
 void Application::DrawToolbar() {
@@ -797,6 +798,9 @@ void Application::DrawDriveMenu(int drive_index) {
         if (ImGui::MenuItem("Inspect Disk...")) {
             gui::DiskInspector::Instance().Open(drive_index, false, emulator_);
         }
+        if (ImGui::MenuItem("Inspect Volume...")) {
+            gui::VolumeInspector::Instance().Open(drive_index, false, emulator_);
+        }
         ImGui::EndMenu();
     }
 }
@@ -819,6 +823,9 @@ void Application::DrawHardDriveMenu(int drive_index) {
         }
         if (ImGui::MenuItem("Inspect Disk...")) {
             gui::DiskInspector::Instance().Open(drive_index, true, emulator_);
+        }
+        if (ImGui::MenuItem("Inspect Volume...")) {
+            gui::VolumeInspector::Instance().Open(drive_index, true, emulator_);
         }
         ImGui::EndMenu();
     }

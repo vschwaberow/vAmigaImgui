@@ -4,6 +4,7 @@
 #include <utility>
 #include "VAmiga.h"
 #undef unreachable
+#define unreachable std::unreachable()
 #include "imgui.h"
 #include <string>
 

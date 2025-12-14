@@ -10,7 +10,6 @@
 #include "resources/IconsFontAwesome6.h"
 #include <utility>
 #include "VAmigaTypes.h"
-#undef unreachable
 namespace vamiga {
 class VAmiga;
 }

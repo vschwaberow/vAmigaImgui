@@ -8,6 +8,7 @@
 #include <utility>
 #include "VAmiga.h"
 #undef unreachable
+#define unreachable std::unreachable()
 class InputManager {
  public:
   explicit InputManager(vamiga::VAmiga& emulator);

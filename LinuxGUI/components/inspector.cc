@@ -3,10 +3,13 @@
 #include <algorithm>
 #include <charconv>
 #include <cstdio>
+#include <cstring>
 #include <format>
 #include <bitset>
 #include <map>
 #include <array>
+#include <vector>
+#include <string>
 #include <string_view>
 #include <optional>
 #include <ranges>
@@ -27,6 +30,89 @@ Inspector& Inspector::Instance() {
   return instance;
 }
 Inspector::Inspector() {}
+
+void Inspector::OpenWindow() {
+  windows_.push_back(WindowState{.open = true, .id = next_id_++, .active_tab = Tab::kCPU});
+}
+
+void Inspector::DrawAll(bool* primary_toggle, vamiga::VAmiga& emu) {
+  if (primary_toggle) {
+    if (*primary_toggle && !windows_.empty()) windows_[0].open = true;
+    if (!*primary_toggle && !windows_.empty()) windows_[0].open = false;
+  }
+
+  bool any_open = false;
+  for (auto& w : windows_) {
+    if (w.open) {
+      any_open = true;
+      DrawWindow(w, emu);
+    }
+  }
+
+  if (!any_open && emu.isTracking()) {
+    emu.trackOff();
+  }
+
+  if (windows_.size() > 1) {
+    windows_.erase(std::remove_if(windows_.begin() + 1, windows_.end(),
+                                  [](const WindowState& w) { return !w.open; }),
+                   windows_.end());
+  }
+  if (windows_.empty()) {
+    windows_.push_back(WindowState{.open = primary_toggle ? *primary_toggle : true,
+                                   .id = next_id_++, .active_tab = Tab::kCPU});
+  }
+  if (primary_toggle && !windows_.empty()) {
+    *primary_toggle = windows_[0].open;
+  }
+}
+
+void Inspector::DrawWindow(WindowState& state, vamiga::VAmiga& emu) {
+  ImGui::SetNextWindowSize(ImVec2(800, 600), ImGuiCond_FirstUseEver);
+  std::string title = std::format(ICON_FA_MAGNIFYING_GLASS " Inspector {}", state.id);
+  if (ImGui::Begin(title.c_str(), &state.open)) {
+    if (!emu.isTracking()) emu.trackOn();
+    DrawToolbar(emu, state);
+    std::string tab_id = std::format("InspectorTabs{}", state.id);
+    if (ImGui::BeginTabBar(tab_id.c_str())) {
+      auto tab_item = [&](Tab tab, const char* label) {
+        if (ImGui::BeginTabItem(label)) {
+          state.active_tab = tab;
+          switch (tab) {
+            case Tab::kCPU: DrawCPU(emu); break;
+            case Tab::kMemory: DrawMemory(emu); break;
+            case Tab::kAgnus: DrawAgnus(emu); break;
+            case Tab::kDenise: DrawDenise(emu); break;
+            case Tab::kPaula: DrawPaula(emu); break;
+            case Tab::kCIA: DrawCIA(emu); break;
+            case Tab::kCopper: DrawCopper(emu); break;
+            case Tab::kBlitter: DrawBlitter(emu); break;
+            case Tab::kEvents: DrawEvents(emu); break;
+            case Tab::kPorts: DrawPorts(emu); break;
+            case Tab::kBus: LogicAnalyzer::Instance().Draw(emu); break;
+            case Tab::kNone: break;
+          }
+          ImGui::EndTabItem();
+        }
+      };
+      tab_item(Tab::kCPU, "CPU");
+      tab_item(Tab::kMemory, "Memory");
+      tab_item(Tab::kAgnus, "Agnus");
+      tab_item(Tab::kDenise, "Denise");
+      tab_item(Tab::kPaula, "Paula");
+      tab_item(Tab::kCIA, "CIA");
+      tab_item(Tab::kCopper, "Copper");
+      tab_item(Tab::kBlitter, "Blitter");
+      tab_item(Tab::kEvents, "Events");
+      tab_item(Tab::kPorts, "Ports");
+      tab_item(Tab::kBus, "Bus");
+      ImGui::EndTabBar();
+    }
+  } else {
+    if (emu.isTracking()) emu.trackOff();
+  }
+  ImGui::End();
+}
 void Inspector::DrawRegister(std::string_view label, uint32_t val, int width) {
   ImGui::Text("%s:", label.data());
   ImGui::SameLine();
@@ -49,7 +135,7 @@ void Inspector::DrawBit(std::string_view label, bool set) {
     ImGui::PopStyleColor();
   }
 }
-void Inspector::DrawToolbar(vamiga::VAmiga& emu) {
+void Inspector::DrawToolbar(vamiga::VAmiga& emu, WindowState& state) {
   ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(8, 0));
   if (ImGui::Button(emu.isRunning() ? ICON_FA_PAUSE : ICON_FA_PLAY)) {
     if (emu.isRunning()) emu.pause(); else emu.run();
@@ -70,6 +156,38 @@ void Inspector::DrawToolbar(vamiga::VAmiga& emu) {
   ImGui::SameLine(0, 20);
   if (ImGui::Button(hex_mode_ ? "HEX" : "DEC")) hex_mode_ = !hex_mode_;
   ImGui::SetItemTooltip("Toggle Hex/Dec");
+  ImGui::SameLine(0, 20);
+  if (ImGui::Button(ICON_FA_PLUS " New")) {
+    OpenWindow();
+  }
+  ImGui::SameLine();
+  constexpr std::array presets = {
+      "CPU","Memory","Agnus","Denise","Paula","CIA","Copper","Blitter","Events","Ports","Bus"};
+  int preset_idx = -1;
+  if (ImGui::Combo(
+          "Preset", &preset_idx,
+          [](void* data, int idx, const char** out_text) {
+            auto* arr = static_cast<const std::array<const char*,11>*>(data);
+            if (idx < 0 || idx >= static_cast<int>(arr->size())) return false;
+            *out_text = (*arr)[static_cast<size_t>(idx)];
+            return true;
+          },
+          (void*)&presets, static_cast<int>(presets.size()))) {
+    switch (preset_idx) {
+      case 0: state.active_tab = Tab::kCPU; break;
+      case 1: state.active_tab = Tab::kMemory; break;
+      case 2: state.active_tab = Tab::kAgnus; break;
+      case 3: state.active_tab = Tab::kDenise; break;
+      case 4: state.active_tab = Tab::kPaula; break;
+      case 5: state.active_tab = Tab::kCIA; break;
+      case 6: state.active_tab = Tab::kCopper; break;
+      case 7: state.active_tab = Tab::kBlitter; break;
+      case 8: state.active_tab = Tab::kEvents; break;
+      case 9: state.active_tab = Tab::kPorts; break;
+      case 10: state.active_tab = Tab::kBus; break;
+      default: break;
+    }
+  }
   ImGui::SameLine(0, 20);
   auto agnus = emu.agnus.getInfo();
   ImGui::TextDisabled("V:%03ld H:%03ld", agnus.vpos, agnus.hpos);
@@ -150,56 +268,137 @@ void Inspector::DrawCPU(vamiga::VAmiga& emu) {
   if (ImGui::CollapsingHeader("Disassembler", ImGuiTreeNodeFlags_DefaultOpen)) {
     ImGui::Checkbox("Follow PC", &follow_pc_);
     if (follow_pc_) dasm_addr_ = cpu.pc0;
-    vamiga::isize len;
-    uint32_t addr = dasm_addr_;
-    ImGui::BeginChild("Dasm", ImVec2(0, 200), true);
-    for ([[maybe_unused]] int i : std::views::iota(0, 12)) {
-      std::optional<vamiga::GuardInfo> bp = emu.cpu.breakpoints.guardAt(addr);
-      std::optional<vamiga::GuardInfo> wp = emu.cpu.watchpoints.guardAt(addr);
-      bool is_bp_enabled = bp && bp->enabled;
-      bool is_bp = bp.has_value();
-      bool is_wp = wp.has_value();
-      ImGui::PushID(addr);
-      if (is_bp) {
-        ImGui::PushStyleColor(ImGuiCol_Button,
-                              is_bp_enabled ? ImVec4(0.8f, 0.2f, 0.2f, 1.0f)
-                                            : ImVec4(0.5f, 0.5f, 0.5f, 1.0f));
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
-                              is_bp_enabled ? ImVec4(1.0f, 0.3f, 0.3f, 1.0f)
-                                            : ImVec4(0.7f, 0.7f, 0.7f, 1.0f));
-        ImGui::PushStyleColor(ImGuiCol_ButtonActive,
-                              is_bp_enabled ? ImVec4(0.8f, 0.2f, 0.2f, 1.0f)
-                                            : ImVec4(0.5f, 0.5f, 0.5f, 1.0f));
-      }
-      if (ImGui::SmallButton(is_bp ? ICON_FA_CIRCLE : ICON_FA_CIRCLE_DOT)) {
-        if (!is_bp) {
-          emu.cpu.breakpoints.setAt(addr);
-        } else if (is_bp_enabled) {
-          emu.cpu.breakpoints.disableAt(addr);
-        } else {
-          emu.cpu.breakpoints.enableAt(addr);
-        }
-      }
-      if (is_bp && ImGui::IsItemClicked(ImGuiMouseButton_Right)) {
-        emu.cpu.breakpoints.removeAt(addr);
-      }
-      ImGui::SetItemTooltip(is_bp
-                                ? (is_bp_enabled ? "Disable (right-click to remove)"
-                                                 : "Enable (right-click to remove)")
-                                : "Set breakpoint");
-      if (is_bp) {
-        ImGui::PopStyleColor(3);
-      }
-      ImGui::SameLine();
-      bool is_pc = (addr == cpu.pc0);
-      if (is_pc) ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1, 1, 0, 1));
-      if (is_wp) ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.2f, 0.9f, 1.0f, 1.0f));
+
+    constexpr int kLines = 256;
+    struct DasmLine {
+      uint32_t addr;
+      uint32_t len;
+      std::string instr;
+    };
+    std::vector<DasmLine> lines;
+    lines.reserve(kLines);
+
+    uint32_t base_addr = static_cast<uint32_t>(std::max(0, dasm_addr_));
+    uint32_t addr = base_addr;
+    for ([[maybe_unused]] int i : std::views::iota(0, kLines)) {
+      vamiga::isize len = 0;
       std::string instr = emu.cpu.debugger.disassembleInstr(addr, &len);
-      ImGui::Text("%08X: %s", addr, instr.c_str());
-      if (is_wp) ImGui::PopStyleColor();
-      if (is_pc) ImGui::PopStyleColor();
-      ImGui::PopID();
-      addr += len;
+      if (len <= 0) break;
+      lines.push_back(DasmLine{addr, static_cast<uint32_t>(len), std::move(instr)});
+      addr += static_cast<uint32_t>(len);
+    }
+    if (lines.empty()) {
+      lines.push_back(DasmLine{base_addr, 2, "???"});
+      addr = base_addr + 2;
+    }
+    uint32_t next_page_addr = addr;
+    uint32_t page_span = std::max<uint32_t>(2, next_page_addr - base_addr);
+
+    std::array<char, 17> addr_buf{};
+    auto addr_str = std::format("{:08X}", base_addr);
+    std::ranges::copy(addr_str, addr_buf.begin());
+    if (ImGui::InputText("##dasm_addr", addr_buf.data(), addr_buf.size(),
+                         ImGuiInputTextFlags_CharsHexadecimal |
+                             ImGuiInputTextFlags_EnterReturnsTrue)) {
+      uint32_t parsed = base_addr;
+      if (auto [_, ec] =
+              std::from_chars(addr_buf.data(),
+                              addr_buf.data() + std::strlen(addr_buf.data()), parsed, 16);
+          ec == std::errc()) {
+        dasm_addr_ = static_cast<int>(parsed);
+        follow_pc_ = false;
+      }
+    }
+    ImGui::SameLine();
+    if (ImGui::SmallButton("PC")) {
+      follow_pc_ = false;
+      dasm_addr_ = static_cast<int>(cpu.pc0);
+    }
+    ImGui::SameLine();
+    if (ImGui::SmallButton(ICON_FA_ARROW_LEFT)) {
+      follow_pc_ = false;
+      uint32_t new_addr = (base_addr > page_span) ? base_addr - page_span : 0;
+      dasm_addr_ = static_cast<int>(new_addr);
+    }
+    ImGui::SetItemTooltip("Show previous block");
+    ImGui::SameLine();
+    if (ImGui::SmallButton(ICON_FA_ARROW_RIGHT)) {
+      follow_pc_ = false;
+      dasm_addr_ = static_cast<int>(next_page_addr);
+    }
+    ImGui::SetItemTooltip("Show next block");
+    ImGui::SameLine();
+    ImGui::TextDisabled("PC %08X", cpu.pc0);
+
+    ImGui::BeginChild("Dasm", ImVec2(0, 260), true);
+    if (ImGui::BeginTable("DasmTable", 3,
+                          ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_RowBg |
+                              ImGuiTableFlags_ScrollY | ImGuiTableFlags_SizingStretchSame)) {
+      ImGui::TableSetupColumn("BP", ImGuiTableColumnFlags_WidthFixed, 36.0f);
+      ImGui::TableSetupColumn("Address", ImGuiTableColumnFlags_WidthFixed, 90.0f);
+      ImGui::TableSetupColumn("Instruction", ImGuiTableColumnFlags_WidthStretch);
+      ImGui::TableHeadersRow();
+      for (const auto& line : lines) {
+        std::optional<vamiga::GuardInfo> bp = emu.cpu.breakpoints.guardAt(line.addr);
+        std::optional<vamiga::GuardInfo> wp = emu.cpu.watchpoints.guardAt(line.addr);
+        bool is_bp_enabled = bp && bp->enabled;
+        bool is_bp = bp.has_value();
+        bool is_wp = wp.has_value();
+        ImGui::PushID(line.addr);
+        ImGui::TableNextRow();
+        ImGui::TableSetColumnIndex(0);
+        if (is_bp) {
+          ImGui::PushStyleColor(ImGuiCol_Button,
+                                is_bp_enabled ? ImVec4(0.8f, 0.2f, 0.2f, 1.0f)
+                                              : ImVec4(0.5f, 0.5f, 0.5f, 1.0f));
+          ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
+                                is_bp_enabled ? ImVec4(1.0f, 0.3f, 0.3f, 1.0f)
+                                              : ImVec4(0.7f, 0.7f, 0.7f, 1.0f));
+          ImGui::PushStyleColor(ImGuiCol_ButtonActive,
+                                is_bp_enabled ? ImVec4(0.8f, 0.2f, 0.2f, 1.0f)
+                                              : ImVec4(0.5f, 0.5f, 0.5f, 1.0f));
+        }
+        if (ImGui::SmallButton(is_bp ? ICON_FA_CIRCLE : ICON_FA_CIRCLE_DOT)) {
+          if (!is_bp) {
+            emu.cpu.breakpoints.setAt(line.addr);
+          } else if (is_bp_enabled) {
+            emu.cpu.breakpoints.disableAt(line.addr);
+          } else {
+            emu.cpu.breakpoints.enableAt(line.addr);
+          }
+        }
+        if (is_bp && ImGui::IsItemClicked(ImGuiMouseButton_Right)) {
+          emu.cpu.breakpoints.removeAt(line.addr);
+        }
+        ImGui::SetItemTooltip(is_bp
+                                  ? (is_bp_enabled ? "Disable (right-click to remove)"
+                                                   : "Enable (right-click to remove)")
+                                  : "Set breakpoint");
+        if (is_bp) {
+          ImGui::PopStyleColor(3);
+        }
+        ImGui::TableSetColumnIndex(1);
+        bool is_pc = (line.addr == cpu.pc0);
+        if (is_pc) ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1, 1, 0, 1));
+        if (is_wp) ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.2f, 0.9f, 1.0f, 1.0f));
+        bool selected =
+            ImGui::Selectable(std::format("{:08X}", line.addr).c_str(), false,
+                              ImGuiSelectableFlags_SpanAllColumns);
+        if (is_wp) ImGui::PopStyleColor();
+        if (is_pc) ImGui::PopStyleColor();
+        if (selected) {
+          follow_pc_ = false;
+          dasm_addr_ = static_cast<int>(line.addr);
+        }
+        ImGui::TableSetColumnIndex(2);
+        if (is_pc) ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1, 1, 0, 1));
+        if (is_wp) ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.2f, 0.9f, 1.0f, 1.0f));
+        ImGui::TextUnformatted(line.instr.c_str());
+        if (is_wp) ImGui::PopStyleColor();
+        if (is_pc) ImGui::PopStyleColor();
+        ImGui::PopID();
+      }
+      ImGui::EndTable();
     }
     ImGui::EndChild();
   }
@@ -1358,30 +1557,5 @@ void Inspector::DrawPorts(vamiga::VAmiga& emu) {
       
       ImGui::EndTable();
   }
-}
-void Inspector::Draw(bool* p_open, vamiga::VAmiga& emu) {
-  if (!p_open || !*p_open) return;
-  ImGui::SetNextWindowSize(ImVec2(800, 600), ImGuiCond_FirstUseEver);
-  if (ImGui::Begin(ICON_FA_MAGNIFYING_GLASS " Inspector", p_open)) {
-    if (!emu.isTracking()) emu.trackOn();
-    DrawToolbar(emu);
-    if (ImGui::BeginTabBar("InspectorTabs")) {
-      if (ImGui::BeginTabItem("CPU")) { DrawCPU(emu); ImGui::EndTabItem(); }
-      if (ImGui::BeginTabItem("Memory")) { DrawMemory(emu); ImGui::EndTabItem(); }
-      if (ImGui::BeginTabItem("Agnus")) { DrawAgnus(emu); ImGui::EndTabItem(); }
-      if (ImGui::BeginTabItem("Denise")) { DrawDenise(emu); ImGui::EndTabItem(); }
-      if (ImGui::BeginTabItem("Paula")) { DrawPaula(emu); ImGui::EndTabItem(); }
-      if (ImGui::BeginTabItem("CIA")) { DrawCIA(emu); ImGui::EndTabItem(); }
-      if (ImGui::BeginTabItem("Copper")) { DrawCopper(emu); ImGui::EndTabItem(); }
-      if (ImGui::BeginTabItem("Blitter")) { DrawBlitter(emu); ImGui::EndTabItem(); }
-      if (ImGui::BeginTabItem("Events")) { DrawEvents(emu); ImGui::EndTabItem(); }
-      if (ImGui::BeginTabItem("Ports")) { DrawPorts(emu); ImGui::EndTabItem(); }
-      if (ImGui::BeginTabItem("Bus")) { LogicAnalyzer::Instance().Draw(emu); ImGui::EndTabItem(); }
-      ImGui::EndTabBar();
-    }
-  } else {
-    if (emu.isTracking()) emu.trackOff();
-  }
-  ImGui::End();
 }
 }
