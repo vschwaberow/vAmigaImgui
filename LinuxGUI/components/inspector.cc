@@ -8,6 +8,7 @@
 #include <bitset>
 #include <map>
 #include <array>
+#include <vector>
 #include <string>
 #include <string_view>
 #include <optional>
@@ -268,40 +269,51 @@ void Inspector::DrawCPU(vamiga::VAmiga& emu) {
     ImGui::Checkbox("Follow PC", &follow_pc_);
     if (follow_pc_) dasm_addr_ = cpu.pc0;
 
-    constexpr int kLines = 12;
+    constexpr int kLines = 256;
     struct DasmLine {
       uint32_t addr;
       uint32_t len;
       std::string instr;
     };
-    std::array<DasmLine, kLines> lines{};
+    std::vector<DasmLine> lines;
+    lines.reserve(kLines);
+
     uint32_t base_addr = static_cast<uint32_t>(std::max(0, dasm_addr_));
     uint32_t addr = base_addr;
-    for (int i : std::views::iota(0, kLines)) {
+    for ([[maybe_unused]] int i : std::views::iota(0, kLines)) {
       vamiga::isize len = 0;
-      lines[static_cast<size_t>(i)].addr = addr;
-      lines[static_cast<size_t>(i)].instr = emu.cpu.debugger.disassembleInstr(addr, &len);
-      lines[static_cast<size_t>(i)].len = static_cast<uint32_t>(len);
+      std::string instr = emu.cpu.debugger.disassembleInstr(addr, &len);
+      if (len <= 0) break;
+      lines.push_back(DasmLine{addr, static_cast<uint32_t>(len), std::move(instr)});
       addr += static_cast<uint32_t>(len);
     }
+    if (lines.empty()) {
+      lines.push_back(DasmLine{base_addr, 2, "???"});
+      addr = base_addr + 2;
+    }
     uint32_t next_page_addr = addr;
-    uint32_t page_span = next_page_addr - base_addr;
-    if (page_span == 0) page_span = 2;
+    uint32_t page_span = std::max<uint32_t>(2, next_page_addr - base_addr);
 
-    ImGui::PushItemWidth(120);
-    char addr_buf[16];
-    std::snprintf(addr_buf, sizeof(addr_buf), "%08X", base_addr);
-    if (ImGui::InputText("##dasm_addr", addr_buf, sizeof(addr_buf),
+    std::array<char, 17> addr_buf{};
+    auto addr_str = std::format("{:08X}", base_addr);
+    std::ranges::copy(addr_str, addr_buf.begin());
+    if (ImGui::InputText("##dasm_addr", addr_buf.data(), addr_buf.size(),
                          ImGuiInputTextFlags_CharsHexadecimal |
                              ImGuiInputTextFlags_EnterReturnsTrue)) {
       uint32_t parsed = base_addr;
-      if (auto [_, ec] = std::from_chars(addr_buf, addr_buf + std::strlen(addr_buf), parsed, 16);
+      if (auto [_, ec] =
+              std::from_chars(addr_buf.data(),
+                              addr_buf.data() + std::strlen(addr_buf.data()), parsed, 16);
           ec == std::errc()) {
         dasm_addr_ = static_cast<int>(parsed);
         follow_pc_ = false;
       }
     }
-    ImGui::PopItemWidth();
+    ImGui::SameLine();
+    if (ImGui::SmallButton("PC")) {
+      follow_pc_ = false;
+      dasm_addr_ = static_cast<int>(cpu.pc0);
+    }
     ImGui::SameLine();
     if (ImGui::SmallButton(ICON_FA_ARROW_LEFT)) {
       follow_pc_ = false;
@@ -315,53 +327,78 @@ void Inspector::DrawCPU(vamiga::VAmiga& emu) {
       dasm_addr_ = static_cast<int>(next_page_addr);
     }
     ImGui::SetItemTooltip("Show next block");
+    ImGui::SameLine();
+    ImGui::TextDisabled("PC %08X", cpu.pc0);
 
-    ImGui::BeginChild("Dasm", ImVec2(0, 200), true);
-    for (const auto& line : lines) {
-      std::optional<vamiga::GuardInfo> bp = emu.cpu.breakpoints.guardAt(line.addr);
-      std::optional<vamiga::GuardInfo> wp = emu.cpu.watchpoints.guardAt(line.addr);
-      bool is_bp_enabled = bp && bp->enabled;
-      bool is_bp = bp.has_value();
-      bool is_wp = wp.has_value();
-      ImGui::PushID(line.addr);
-      if (is_bp) {
-        ImGui::PushStyleColor(ImGuiCol_Button,
-                              is_bp_enabled ? ImVec4(0.8f, 0.2f, 0.2f, 1.0f)
-                                            : ImVec4(0.5f, 0.5f, 0.5f, 1.0f));
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
-                              is_bp_enabled ? ImVec4(1.0f, 0.3f, 0.3f, 1.0f)
-                                            : ImVec4(0.7f, 0.7f, 0.7f, 1.0f));
-        ImGui::PushStyleColor(ImGuiCol_ButtonActive,
-                              is_bp_enabled ? ImVec4(0.8f, 0.2f, 0.2f, 1.0f)
-                                            : ImVec4(0.5f, 0.5f, 0.5f, 1.0f));
-      }
-      if (ImGui::SmallButton(is_bp ? ICON_FA_CIRCLE : ICON_FA_CIRCLE_DOT)) {
-        if (!is_bp) {
-          emu.cpu.breakpoints.setAt(line.addr);
-        } else if (is_bp_enabled) {
-          emu.cpu.breakpoints.disableAt(line.addr);
-        } else {
-          emu.cpu.breakpoints.enableAt(line.addr);
+    ImGui::BeginChild("Dasm", ImVec2(0, 260), true);
+    if (ImGui::BeginTable("DasmTable", 3,
+                          ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_RowBg |
+                              ImGuiTableFlags_ScrollY | ImGuiTableFlags_SizingStretchSame)) {
+      ImGui::TableSetupColumn("BP", ImGuiTableColumnFlags_WidthFixed, 36.0f);
+      ImGui::TableSetupColumn("Address", ImGuiTableColumnFlags_WidthFixed, 90.0f);
+      ImGui::TableSetupColumn("Instruction", ImGuiTableColumnFlags_WidthStretch);
+      ImGui::TableHeadersRow();
+      for (const auto& line : lines) {
+        std::optional<vamiga::GuardInfo> bp = emu.cpu.breakpoints.guardAt(line.addr);
+        std::optional<vamiga::GuardInfo> wp = emu.cpu.watchpoints.guardAt(line.addr);
+        bool is_bp_enabled = bp && bp->enabled;
+        bool is_bp = bp.has_value();
+        bool is_wp = wp.has_value();
+        ImGui::PushID(line.addr);
+        ImGui::TableNextRow();
+        ImGui::TableSetColumnIndex(0);
+        if (is_bp) {
+          ImGui::PushStyleColor(ImGuiCol_Button,
+                                is_bp_enabled ? ImVec4(0.8f, 0.2f, 0.2f, 1.0f)
+                                              : ImVec4(0.5f, 0.5f, 0.5f, 1.0f));
+          ImGui::PushStyleColor(ImGuiCol_ButtonHovered,
+                                is_bp_enabled ? ImVec4(1.0f, 0.3f, 0.3f, 1.0f)
+                                              : ImVec4(0.7f, 0.7f, 0.7f, 1.0f));
+          ImGui::PushStyleColor(ImGuiCol_ButtonActive,
+                                is_bp_enabled ? ImVec4(0.8f, 0.2f, 0.2f, 1.0f)
+                                              : ImVec4(0.5f, 0.5f, 0.5f, 1.0f));
         }
+        if (ImGui::SmallButton(is_bp ? ICON_FA_CIRCLE : ICON_FA_CIRCLE_DOT)) {
+          if (!is_bp) {
+            emu.cpu.breakpoints.setAt(line.addr);
+          } else if (is_bp_enabled) {
+            emu.cpu.breakpoints.disableAt(line.addr);
+          } else {
+            emu.cpu.breakpoints.enableAt(line.addr);
+          }
+        }
+        if (is_bp && ImGui::IsItemClicked(ImGuiMouseButton_Right)) {
+          emu.cpu.breakpoints.removeAt(line.addr);
+        }
+        ImGui::SetItemTooltip(is_bp
+                                  ? (is_bp_enabled ? "Disable (right-click to remove)"
+                                                   : "Enable (right-click to remove)")
+                                  : "Set breakpoint");
+        if (is_bp) {
+          ImGui::PopStyleColor(3);
+        }
+        ImGui::TableSetColumnIndex(1);
+        bool is_pc = (line.addr == cpu.pc0);
+        if (is_pc) ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1, 1, 0, 1));
+        if (is_wp) ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.2f, 0.9f, 1.0f, 1.0f));
+        bool selected =
+            ImGui::Selectable(std::format("{:08X}", line.addr).c_str(), false,
+                              ImGuiSelectableFlags_SpanAllColumns);
+        if (is_wp) ImGui::PopStyleColor();
+        if (is_pc) ImGui::PopStyleColor();
+        if (selected) {
+          follow_pc_ = false;
+          dasm_addr_ = static_cast<int>(line.addr);
+        }
+        ImGui::TableSetColumnIndex(2);
+        if (is_pc) ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1, 1, 0, 1));
+        if (is_wp) ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.2f, 0.9f, 1.0f, 1.0f));
+        ImGui::TextUnformatted(line.instr.c_str());
+        if (is_wp) ImGui::PopStyleColor();
+        if (is_pc) ImGui::PopStyleColor();
+        ImGui::PopID();
       }
-      if (is_bp && ImGui::IsItemClicked(ImGuiMouseButton_Right)) {
-        emu.cpu.breakpoints.removeAt(line.addr);
-      }
-      ImGui::SetItemTooltip(is_bp
-                                ? (is_bp_enabled ? "Disable (right-click to remove)"
-                                                 : "Enable (right-click to remove)")
-                                : "Set breakpoint");
-      if (is_bp) {
-        ImGui::PopStyleColor(3);
-      }
-      ImGui::SameLine();
-      bool is_pc = (line.addr == cpu.pc0);
-      if (is_pc) ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1, 1, 0, 1));
-      if (is_wp) ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.2f, 0.9f, 1.0f, 1.0f));
-      ImGui::Text("%08X: %s", line.addr, line.instr.c_str());
-      if (is_wp) ImGui::PopStyleColor();
-      if (is_pc) ImGui::PopStyleColor();
-      ImGui::PopID();
+      ImGui::EndTable();
     }
     ImGui::EndChild();
   }
