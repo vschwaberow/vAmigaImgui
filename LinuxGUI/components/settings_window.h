@@ -69,6 +69,7 @@ class SettingsWindow {
                    std::function<void()> on_load,
                    std::function<void()> on_eject);
   int current_tab_ = 0;
+  std::string error_message_;
 };
 }
 #endif

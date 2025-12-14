@@ -1,5 +1,6 @@
 #include "components/settings_window.h"
 #include <array>
+#include <exception>
 #include <format>
 #include <ranges>
 #include <span>
@@ -101,6 +102,17 @@ void SettingsWindow::Draw(bool* p_open, vamiga::VAmiga& emulator,
     ImGui::TableSetColumnIndex(1);
     DrawContent(emulator, ctx);
     ImGui::EndTable();
+  }
+  if (!error_message_.empty()) ImGui::OpenPopup("Settings Error");
+  if (ImGui::BeginPopupModal("Settings Error", nullptr,
+                             ImGuiWindowFlags_AlwaysAutoResize)) {
+    ImGui::TextWrapped("%s", error_message_.c_str());
+    ImGui::Separator();
+    if (ImGui::Button("Close")) {
+      error_message_.clear();
+      ImGui::CloseCurrentPopup();
+    }
+    ImGui::EndPopup();
   }
   ImGui::End();
 }
@@ -218,44 +230,58 @@ void SettingsWindow::DrawROMs(vamiga::VAmiga& emulator, const SettingsContext& c
               ctx.on_eject_ext_rom);
 }
 void SettingsWindow::DrawHardware(vamiga::VAmiga& emulator) {
+  auto try_set = [this, &emulator](vamiga::Opt opt, auto value) {
+    try {
+      emulator.set(opt, value);
+    } catch (const std::exception& e) {
+      error_message_ = e.what();
+    }
+  };
   ImGui::Text("CPU & Chipset");
   ImGui::Separator();
   int cpu = static_cast<int>(emulator.get(vamiga::Opt::CPU_REVISION));
   static constexpr std::array cpu_items = { "68000", "68010", "68EC020" };
   if (ImGui::Combo("CPU Model", &cpu, cpu_items.data(), cpu_items.size())) {
-    emulator.set(vamiga::Opt::CPU_REVISION, cpu);
+    try_set(vamiga::Opt::CPU_REVISION, cpu);
   }
   int agnus = static_cast<int>(emulator.get(vamiga::Opt::AGNUS_REVISION));
   static constexpr std::array agnus_items = { "OCS (A1000)", "OCS (A500/A2000)", "ECS (1MB)", "ECS (2MB)" };
   if (ImGui::Combo("Agnus", &agnus, agnus_items.data(), agnus_items.size())) {
-    emulator.set(vamiga::Opt::AGNUS_REVISION, agnus);
+    try_set(vamiga::Opt::AGNUS_REVISION, agnus);
   }
   int denise = static_cast<int>(emulator.get(vamiga::Opt::DENISE_REVISION));
   static constexpr std::array denise_items = { "OCS", "ECS" };
   if (ImGui::Combo("Denise", &denise, denise_items.data(), denise_items.size())) {
-    emulator.set(vamiga::Opt::DENISE_REVISION, denise);
+    try_set(vamiga::Opt::DENISE_REVISION, denise);
   }
   ImGui::Spacing();
   ImGui::Text("Memory");
   ImGui::Separator();
+  bool mem_locked = emulator.isPoweredOn();
+  if (mem_locked) {
+    ImGui::TextColored(ImVec4(1.0f, 0.6f, 0.2f, 1.0f),
+                       ICON_FA_TRIANGLE_EXCLAMATION " Power off to change memory size.");
+  }
+  ImGui::BeginDisabled(mem_locked);
   int chip_ram = static_cast<int>(emulator.get(vamiga::Opt::MEM_CHIP_RAM));
   static constexpr auto chip_items = std::to_array<const char*>({"512 KB", "1 MB", "2 MB"});
   static constexpr auto chip_values = std::to_array<int>({512, 1024, 2048});
   if (DrawValueCombo("Chip RAM", chip_ram, chip_items, chip_values)) {
-    emulator.set(vamiga::Opt::MEM_CHIP_RAM, chip_ram);
+    try_set(vamiga::Opt::MEM_CHIP_RAM, chip_ram);
   }
   int slow_ram = static_cast<int>(emulator.get(vamiga::Opt::MEM_SLOW_RAM));
   static constexpr auto slow_items = std::to_array<const char*>({"None", "512 KB", "1 MB", "1.5 MB"});
   static constexpr auto slow_values = std::to_array<int>({0, 512, 1024, 1536});
   if (DrawValueCombo("Slow RAM", slow_ram, slow_items, slow_values)) {
-    emulator.set(vamiga::Opt::MEM_SLOW_RAM, slow_ram);
+    try_set(vamiga::Opt::MEM_SLOW_RAM, slow_ram);
   }
   int fast_ram = static_cast<int>(emulator.get(vamiga::Opt::MEM_FAST_RAM));
   static constexpr auto fast_items = std::to_array<const char*>({"None", "512 KB", "1 MB", "2 MB", "4 MB", "8 MB"});
   static constexpr auto fast_values = std::to_array<int>({0, 512, 1024, 2048, 4096, 8192});
   if (DrawValueCombo("Fast RAM", fast_ram, fast_items, fast_values)) {
-    emulator.set(vamiga::Opt::MEM_FAST_RAM, fast_ram);
+    try_set(vamiga::Opt::MEM_FAST_RAM, fast_ram);
   }
+  ImGui::EndDisabled();
   ImGui::Spacing();
   if (ImGui::Button("Hard Reset Machine")) {
       emulator.hardReset();
