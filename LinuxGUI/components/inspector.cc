@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <charconv>
 #include <cstdio>
+#include <cstring>
 #include <format>
 #include <bitset>
 #include <map>
@@ -266,16 +267,63 @@ void Inspector::DrawCPU(vamiga::VAmiga& emu) {
   if (ImGui::CollapsingHeader("Disassembler", ImGuiTreeNodeFlags_DefaultOpen)) {
     ImGui::Checkbox("Follow PC", &follow_pc_);
     if (follow_pc_) dasm_addr_ = cpu.pc0;
-    vamiga::isize len;
-    uint32_t addr = dasm_addr_;
+
+    constexpr int kLines = 12;
+    struct DasmLine {
+      uint32_t addr;
+      uint32_t len;
+      std::string instr;
+    };
+    std::array<DasmLine, kLines> lines{};
+    uint32_t base_addr = static_cast<uint32_t>(std::max(0, dasm_addr_));
+    uint32_t addr = base_addr;
+    for (int i : std::views::iota(0, kLines)) {
+      vamiga::isize len = 0;
+      lines[static_cast<size_t>(i)].addr = addr;
+      lines[static_cast<size_t>(i)].instr = emu.cpu.debugger.disassembleInstr(addr, &len);
+      lines[static_cast<size_t>(i)].len = static_cast<uint32_t>(len);
+      addr += static_cast<uint32_t>(len);
+    }
+    uint32_t next_page_addr = addr;
+    uint32_t page_span = next_page_addr - base_addr;
+    if (page_span == 0) page_span = 2;
+
+    ImGui::PushItemWidth(120);
+    char addr_buf[16];
+    std::snprintf(addr_buf, sizeof(addr_buf), "%08X", base_addr);
+    if (ImGui::InputText("##dasm_addr", addr_buf, sizeof(addr_buf),
+                         ImGuiInputTextFlags_CharsHexadecimal |
+                             ImGuiInputTextFlags_EnterReturnsTrue)) {
+      uint32_t parsed = base_addr;
+      if (auto [_, ec] = std::from_chars(addr_buf, addr_buf + std::strlen(addr_buf), parsed, 16);
+          ec == std::errc()) {
+        dasm_addr_ = static_cast<int>(parsed);
+        follow_pc_ = false;
+      }
+    }
+    ImGui::PopItemWidth();
+    ImGui::SameLine();
+    if (ImGui::SmallButton(ICON_FA_ARROW_LEFT)) {
+      follow_pc_ = false;
+      uint32_t new_addr = (base_addr > page_span) ? base_addr - page_span : 0;
+      dasm_addr_ = static_cast<int>(new_addr);
+    }
+    ImGui::SetItemTooltip("Show previous block");
+    ImGui::SameLine();
+    if (ImGui::SmallButton(ICON_FA_ARROW_RIGHT)) {
+      follow_pc_ = false;
+      dasm_addr_ = static_cast<int>(next_page_addr);
+    }
+    ImGui::SetItemTooltip("Show next block");
+
     ImGui::BeginChild("Dasm", ImVec2(0, 200), true);
-    for ([[maybe_unused]] int i : std::views::iota(0, 12)) {
-      std::optional<vamiga::GuardInfo> bp = emu.cpu.breakpoints.guardAt(addr);
-      std::optional<vamiga::GuardInfo> wp = emu.cpu.watchpoints.guardAt(addr);
+    for (const auto& line : lines) {
+      std::optional<vamiga::GuardInfo> bp = emu.cpu.breakpoints.guardAt(line.addr);
+      std::optional<vamiga::GuardInfo> wp = emu.cpu.watchpoints.guardAt(line.addr);
       bool is_bp_enabled = bp && bp->enabled;
       bool is_bp = bp.has_value();
       bool is_wp = wp.has_value();
-      ImGui::PushID(addr);
+      ImGui::PushID(line.addr);
       if (is_bp) {
         ImGui::PushStyleColor(ImGuiCol_Button,
                               is_bp_enabled ? ImVec4(0.8f, 0.2f, 0.2f, 1.0f)
@@ -289,15 +337,15 @@ void Inspector::DrawCPU(vamiga::VAmiga& emu) {
       }
       if (ImGui::SmallButton(is_bp ? ICON_FA_CIRCLE : ICON_FA_CIRCLE_DOT)) {
         if (!is_bp) {
-          emu.cpu.breakpoints.setAt(addr);
+          emu.cpu.breakpoints.setAt(line.addr);
         } else if (is_bp_enabled) {
-          emu.cpu.breakpoints.disableAt(addr);
+          emu.cpu.breakpoints.disableAt(line.addr);
         } else {
-          emu.cpu.breakpoints.enableAt(addr);
+          emu.cpu.breakpoints.enableAt(line.addr);
         }
       }
       if (is_bp && ImGui::IsItemClicked(ImGuiMouseButton_Right)) {
-        emu.cpu.breakpoints.removeAt(addr);
+        emu.cpu.breakpoints.removeAt(line.addr);
       }
       ImGui::SetItemTooltip(is_bp
                                 ? (is_bp_enabled ? "Disable (right-click to remove)"
@@ -307,15 +355,13 @@ void Inspector::DrawCPU(vamiga::VAmiga& emu) {
         ImGui::PopStyleColor(3);
       }
       ImGui::SameLine();
-      bool is_pc = (addr == cpu.pc0);
+      bool is_pc = (line.addr == cpu.pc0);
       if (is_pc) ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1, 1, 0, 1));
       if (is_wp) ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.2f, 0.9f, 1.0f, 1.0f));
-      std::string instr = emu.cpu.debugger.disassembleInstr(addr, &len);
-      ImGui::Text("%08X: %s", addr, instr.c_str());
+      ImGui::Text("%08X: %s", line.addr, line.instr.c_str());
       if (is_wp) ImGui::PopStyleColor();
       if (is_pc) ImGui::PopStyleColor();
       ImGui::PopID();
-      addr += len;
     }
     ImGui::EndChild();
   }
