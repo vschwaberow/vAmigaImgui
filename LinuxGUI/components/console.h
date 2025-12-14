@@ -10,6 +10,7 @@
 #include <utility>
 #include "VAmiga.h"
 #undef unreachable
+#define unreachable std::unreachable()
 
 namespace gui {
 
@@ -51,4 +52,3 @@ class Console {
 }
 
 #endif
-

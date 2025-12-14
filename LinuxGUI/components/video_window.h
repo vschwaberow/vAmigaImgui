@@ -4,7 +4,6 @@
 #include "imgui.h"
 #include <utility>
 #include "VAmigaTypes.h"
-#undef unreachable
 namespace gui {
 class VideoWindow {
  public:

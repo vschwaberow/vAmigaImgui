@@ -2,10 +2,10 @@
 #define LINUXGUI_COMPONENTS_VOLUME_INSPECTOR_H_
 
 #include <memory>
+#include <utility>
 #include <string>
 #include <vector>
 #include "VAmiga.h"
-#undef unreachable
 #include "FileSystems/MutableFileSystem.h"
 #include "imgui.h"
 

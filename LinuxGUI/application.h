@@ -8,7 +8,6 @@
 #include <string_view>
 #include <vector>
 #include "VAmiga.h"
-#undef unreachable
 #include "components/input_manager.h"
 #include "services/config_provider.h"
 struct SDLWindowDeleter {

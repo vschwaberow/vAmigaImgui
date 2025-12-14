@@ -32,12 +32,11 @@ ImVec4 ColorFor(vamiga::FSBlockType type) {
 
 std::string_view BootBlockName(vamiga::BootBlockType type) {
   switch (type) {
-    case vamiga::BootBlockType::DOS: return "DOS";
-    case vamiga::BootBlockType::KICK: return "Kick";
-    case vamiga::BootBlockType::EXT: return "Extended";
-    case vamiga::BootBlockType::RAW: return "Raw";
-    default: return "Unknown";
+    case vamiga::BootBlockType::STANDARD: return "Standard";
+    case vamiga::BootBlockType::VIRUS: return "Virus";
+    case vamiga::BootBlockType::CUSTOM: return "Custom";
   }
+  return "Unknown";
 }
 
 enum class AllocationState : uint8_t { Free = 0, Allocated = 1, Ambiguous = 2, Conflict = 3 };
@@ -85,12 +84,15 @@ void VolumeInspector::Refresh(vamiga::VAmiga& emu) {
 
   try {
     if (is_hd_) {
-      if (emu.hd[drive_nr_]->hasDisk()) {
-        fs_ = std::make_unique<vamiga::MutableFileSystem>(*emu.hd[drive_nr_], part_);
+      auto hd_info = emu.hd[drive_nr_]->getInfo();
+      if (hd_info.hasDisk && emu.hd[drive_nr_]->drive) {
+        fs_ = std::make_unique<vamiga::MutableFileSystem>(*emu.hd[drive_nr_]->drive,
+                                                          part_);
       }
     } else {
-      if (emu.df[drive_nr_]->hasDisk()) {
-        fs_ = std::make_unique<vamiga::MutableFileSystem>(*emu.df[drive_nr_]);
+      auto df_info = emu.df[drive_nr_]->getInfo();
+      if (df_info.hasDisk && emu.df[drive_nr_]->drive) {
+        fs_ = std::make_unique<vamiga::MutableFileSystem>(*emu.df[drive_nr_]->drive);
       }
     }
   } catch (...) {
@@ -99,7 +101,6 @@ void VolumeInspector::Refresh(vamiga::VAmiga& emu) {
 
   if (fs_) {
     info_ = fs_->getInfo();
-    auto traits = fs_->getTraits();
     const size_t block_count = static_cast<size_t>(info_.numBlocks);
     usage_map_.resize(block_count);
     alloc_map_.resize(block_count);
