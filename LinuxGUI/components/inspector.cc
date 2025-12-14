@@ -75,10 +75,10 @@ void Inspector::DrawWindow(WindowState& state, vamiga::VAmiga& emu) {
     DrawToolbar(emu, state);
     std::string tab_id = std::format("InspectorTabs{}", state.id);
     if (ImGui::BeginTabBar(tab_id.c_str())) {
-      auto tab_item = [&](Tab tab, const char* label) {
-        if (ImGui::BeginTabItem(label)) {
-          state.active_tab = tab;
-          switch (tab) {
+      ForEachTab([&](const TabDescriptor& desc) {
+        if (ImGui::BeginTabItem(desc.label.data())) {
+          state.active_tab = desc.tab;
+          switch (desc.tab) {
             case Tab::kCPU: DrawCPU(emu); break;
             case Tab::kMemory: DrawMemory(emu); break;
             case Tab::kAgnus: DrawAgnus(emu); break;
@@ -94,18 +94,7 @@ void Inspector::DrawWindow(WindowState& state, vamiga::VAmiga& emu) {
           }
           ImGui::EndTabItem();
         }
-      };
-      tab_item(Tab::kCPU, "CPU");
-      tab_item(Tab::kMemory, "Memory");
-      tab_item(Tab::kAgnus, "Agnus");
-      tab_item(Tab::kDenise, "Denise");
-      tab_item(Tab::kPaula, "Paula");
-      tab_item(Tab::kCIA, "CIA");
-      tab_item(Tab::kCopper, "Copper");
-      tab_item(Tab::kBlitter, "Blitter");
-      tab_item(Tab::kEvents, "Events");
-      tab_item(Tab::kPorts, "Ports");
-      tab_item(Tab::kBus, "Bus");
+      });
       ImGui::EndTabBar();
     }
   } else {
@@ -161,32 +150,19 @@ void Inspector::DrawToolbar(vamiga::VAmiga& emu, WindowState& state) {
     OpenWindow();
   }
   ImGui::SameLine();
-  constexpr std::array presets = {
-      "CPU","Memory","Agnus","Denise","Paula","CIA","Copper","Blitter","Events","Ports","Bus"};
   int preset_idx = -1;
   if (ImGui::Combo(
           "Preset", &preset_idx,
           [](void* data, int idx, const char** out_text) {
-            auto* arr = static_cast<const std::array<const char*,11>*>(data);
-            if (idx < 0 || idx >= static_cast<int>(arr->size())) return false;
-            *out_text = (*arr)[static_cast<size_t>(idx)];
+            auto* arr = static_cast<const TabDescriptor*>(data);
+            auto count = static_cast<int>(Inspector::kTabs.size());
+            if (idx < 0 || idx >= count) return false;
+            *out_text = arr[idx].label.data();
             return true;
           },
-          (void*)&presets, static_cast<int>(presets.size()))) {
-    switch (preset_idx) {
-      case 0: state.active_tab = Tab::kCPU; break;
-      case 1: state.active_tab = Tab::kMemory; break;
-      case 2: state.active_tab = Tab::kAgnus; break;
-      case 3: state.active_tab = Tab::kDenise; break;
-      case 4: state.active_tab = Tab::kPaula; break;
-      case 5: state.active_tab = Tab::kCIA; break;
-      case 6: state.active_tab = Tab::kCopper; break;
-      case 7: state.active_tab = Tab::kBlitter; break;
-      case 8: state.active_tab = Tab::kEvents; break;
-      case 9: state.active_tab = Tab::kPorts; break;
-      case 10: state.active_tab = Tab::kBus; break;
-      default: break;
-    }
+          const_cast<TabDescriptor*>(Inspector::kTabs.data()),
+          static_cast<int>(Inspector::kTabs.size()))) {
+    state.active_tab = TabFromIndex(static_cast<std::size_t>(preset_idx));
   }
   ImGui::SameLine(0, 20);
   auto agnus = emu.agnus.getInfo();

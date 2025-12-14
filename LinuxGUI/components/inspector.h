@@ -1,8 +1,12 @@
 #ifndef LINUXGUI_COMPONENTS_INSPECTOR_H_
 #define LINUXGUI_COMPONENTS_INSPECTOR_H_
+#include <array>
+#include <concepts>
+#include <functional>
 #include <string>
-#include <vector>
+#include <string_view>
 #include <utility>
+#include <vector>
 #include "VAmiga.h"
 #undef unreachable
 #define unreachable std::unreachable()
@@ -29,6 +33,37 @@ class Inspector {
     kBus,
     kNone
   };
+  struct TabDescriptor {
+    Tab tab;
+    std::string_view label;
+  };
+  static constexpr auto kTabs =
+      std::to_array<TabDescriptor>({TabDescriptor{Tab::kCPU, "CPU"},
+                                    TabDescriptor{Tab::kMemory, "Memory"},
+                                    TabDescriptor{Tab::kAgnus, "Agnus"},
+                                    TabDescriptor{Tab::kDenise, "Denise"},
+                                    TabDescriptor{Tab::kPaula, "Paula"},
+                                    TabDescriptor{Tab::kCIA, "CIA"},
+                                    TabDescriptor{Tab::kCopper, "Copper"},
+                                    TabDescriptor{Tab::kBlitter, "Blitter"},
+                                    TabDescriptor{Tab::kEvents, "Events"},
+                                    TabDescriptor{Tab::kPorts, "Ports"},
+                                    TabDescriptor{Tab::kBus, "Bus"}});
+  static constexpr std::string_view TabLabel(Tab tab) {
+    for (const auto& entry : kTabs) {
+      if (entry.tab == tab) return entry.label;
+    }
+    return "Unknown";
+  }
+  static constexpr Tab TabFromIndex(std::size_t idx) {
+    return idx < kTabs.size() ? kTabs[idx].tab : Tab::kNone;
+  }
+  template <std::invocable<const TabDescriptor&> F>
+  static constexpr void ForEachTab(F&& fn) {
+    for (const auto& entry : kTabs) {
+      std::invoke(fn, entry);
+    }
+  }
   struct WindowState {
     bool open = true;
     int id = 0;
@@ -58,7 +93,11 @@ class Inspector {
   void DrawHexDump(vamiga::VAmiga& emu, uint32_t addr, int rows,
                    vamiga::Accessor accessor);
  public:
-  void SetDasmAddress(int addr) { dasm_addr_ = addr; follow_pc_ = false; }
+  template <std::integral T>
+  void SetDasmAddress(T addr) {
+    dasm_addr_ = static_cast<int>(addr);
+    follow_pc_ = false;
+  }
  private:
   void DrawCopperList(int list_idx, bool symbolic, int extra_rows,
                       const vamiga::CopperInfo& info, vamiga::VAmiga& emu);
