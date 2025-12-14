@@ -13,20 +13,34 @@
 namespace gui {
 
 namespace {
-ImVec4 ColorFor(vamiga::FSBlockType type) {
-  switch (type) {
-    case vamiga::FSBlockType::BOOT: return ImVec4(1.0f, 0.70f, 0.4f, 1.0f);
-    case vamiga::FSBlockType::ROOT: return ImVec4(1.0f, 0.40f, 0.40f, 1.0f);
-    case vamiga::FSBlockType::BITMAP: return ImVec4(0.74f, 0.52f, 1.0f, 1.0f);
-    case vamiga::FSBlockType::BITMAP_EXT: return ImVec4(0.98f, 0.40f, 0.98f, 1.0f);
-    case vamiga::FSBlockType::USERDIR: return ImVec4(1.0f, 0.94f, 0.52f, 1.0f);
-    case vamiga::FSBlockType::FILEHEADER: return ImVec4(0.40f, 0.66f, 1.0f, 1.0f);
-    case vamiga::FSBlockType::FILELIST: return ImVec4(0.0f, 0.60f, 0.0f, 1.0f);
-    case vamiga::FSBlockType::DATA_OFS: return ImVec4(0.52f, 0.93f, 0.52f, 1.0f);
-    case vamiga::FSBlockType::DATA_FFS: return ImVec4(0.52f, 0.93f, 0.52f, 1.0f);
-    case vamiga::FSBlockType::EMPTY: return ImVec4(0.60f, 0.60f, 0.60f, 1.0f);
-    case vamiga::FSBlockType::UNKNOWN:
-    default: return ImVec4(0.85f, 0.85f, 0.85f, 1.0f);
+template <typename Enum, std::size_t N>
+requires std::is_enum_v<Enum>
+constexpr ImVec4 EnumColor(Enum e, const std::array<ImVec4, N>& map,
+                           ImVec4 fallback = ImVec4(0.75f, 0.75f, 0.75f, 1.0f)) {
+  auto idx = static_cast<std::size_t>(std::to_underlying(e));
+  if (idx < map.size()) return map[idx];
+  return fallback;
+}
+
+template <typename Enum, std::size_t N, typename CountAccessor>
+requires std::is_enum_v<Enum>
+void DrawLegend(const char* table_id, const std::array<ImVec4, N>& colors,
+                std::span<const Enum> order, CountAccessor&& count_fn) {
+  if (ImGui::BeginTable(table_id, 2, ImGuiTableFlags_SizingFixedFit)) {
+    ImGui::TableSetupColumn("Color", ImGuiTableColumnFlags_WidthFixed, 24.0f);
+    ImGui::TableSetupColumn("Type", ImGuiTableColumnFlags_WidthStretch);
+    for (auto type : order) {
+      ImGui::TableNextRow();
+      ImGui::TableSetColumnIndex(0);
+      ImGui::ColorButton(
+          "##col", EnumColor(type, colors),
+          ImGuiColorEditFlags_NoTooltip | ImGuiColorEditFlags_NoDragDrop,
+          ImVec2(18, 18));
+      ImGui::TableSetColumnIndex(1);
+      ImGui::Text("%s (%d)", vamiga::FSBlockTypeEnum::_key(type),
+                  count_fn(type));
+    }
+    ImGui::EndTable();
   }
 }
 
@@ -42,24 +56,31 @@ std::string_view BootBlockName(vamiga::BootBlockType type) {
 enum class AllocationState : uint8_t { Free = 0, Allocated = 1, Ambiguous = 2, Conflict = 3 };
 enum class HealthState : uint8_t { Unused = 0, Ok = 1, Error = 2 };
 
-ImVec4 ColorForAlloc(AllocationState s) {
-  switch (s) {
-    case AllocationState::Free: return ImVec4(0.60f, 0.60f, 0.60f, 1.0f);
-    case AllocationState::Allocated: return ImVec4(0.40f, 0.80f, 0.40f, 1.0f);
-    case AllocationState::Ambiguous: return ImVec4(0.95f, 0.85f, 0.40f, 1.0f);
-    case AllocationState::Conflict: return ImVec4(0.90f, 0.25f, 0.25f, 1.0f);
-  }
-  return ImVec4(0.75f, 0.75f, 0.75f, 1.0f);
-}
+constexpr std::array<ImVec4, 11> kFsColors = {
+    ImVec4(1.0f, 0.70f, 0.4f, 1.0f),   // BOOT
+    ImVec4(1.0f, 0.40f, 0.40f, 1.0f),  // ROOT
+    ImVec4(0.74f, 0.52f, 1.0f, 1.0f),  // BITMAP
+    ImVec4(0.98f, 0.40f, 0.98f, 1.0f), // BITMAP_EXT
+    ImVec4(1.0f, 0.94f, 0.52f, 1.0f),  // USERDIR
+    ImVec4(0.40f, 0.66f, 1.0f, 1.0f),  // FILEHEADER
+    ImVec4(0.0f, 0.60f, 0.0f, 1.0f),   // FILELIST
+    ImVec4(0.52f, 0.93f, 0.52f, 1.0f), // DATA_OFS
+    ImVec4(0.52f, 0.93f, 0.52f, 1.0f), // DATA_FFS
+    ImVec4(0.60f, 0.60f, 0.60f, 1.0f), // EMPTY
+    ImVec4(0.85f, 0.85f, 0.85f, 1.0f)}; // UNKNOWN
 
-ImVec4 ColorForHealth(HealthState s) {
-  switch (s) {
-    case HealthState::Unused: return ImVec4(0.60f, 0.60f, 0.60f, 1.0f);
-    case HealthState::Ok: return ImVec4(0.40f, 0.80f, 0.40f, 1.0f);
-    case HealthState::Error: return ImVec4(0.90f, 0.25f, 0.25f, 1.0f);
-  }
-  return ImVec4(0.75f, 0.75f, 0.75f, 1.0f);
-}
+constexpr std::array<ImVec4, 4> kAllocColors = {
+    ImVec4(0.60f, 0.60f, 0.60f, 1.0f),
+    ImVec4(0.40f, 0.80f, 0.40f, 1.0f),
+    ImVec4(0.95f, 0.85f, 0.40f, 1.0f),
+    ImVec4(0.90f, 0.25f, 0.25f, 1.0f),
+};
+
+constexpr std::array<ImVec4, 3> kHealthColors = {
+    ImVec4(0.60f, 0.60f, 0.60f, 1.0f),
+    ImVec4(0.40f, 0.80f, 0.40f, 1.0f),
+    ImVec4(0.90f, 0.25f, 0.25f, 1.0f),
+};
 }  // namespace
 
 VolumeInspector& VolumeInspector::Instance() {
@@ -173,11 +194,15 @@ void VolumeInspector::Draw(vamiga::VAmiga& emu) {
 }
 
 void VolumeInspector::DrawInfo() {
-  ImGui::Text("Name: %s", info_.name.c_str());
-  ImGui::Text("Created: %s", info_.creationDate.c_str());
-  ImGui::Text("Modified: %s", info_.modificationDate.c_str());
-
   auto traits = fs_->getTraits();
+  auto row = [](std::string_view key, auto&& value) {
+    std::string val = std::format("{}", std::forward<decltype(value)>(value));
+    ImGui::Text("%.*s%s", static_cast<int>(key.size()), key.data(), val.c_str());
+  };
+  row("Name: ", info_.name);
+  row("Created: ", info_.creationDate);
+  row("Modified: ", info_.modificationDate);
+
   ImGui::Text("Format: %s (%s)",
               vamiga::FSFormatEnum::_key(traits.dos),
               vamiga::isOFSVolumeType(traits.dos) ? "OFS" : "FFS");
@@ -206,7 +231,8 @@ void VolumeInspector::DrawUsage() {
     ImVec2 p0 = ImVec2(start.x + col * cell, start.y + row * cell);
     ImVec2 p1 = ImVec2(p0.x + cell - 1, p0.y + cell - 1);
     auto type = static_cast<vamiga::FSBlockType>(usage_map_[static_cast<size_t>(i)]);
-    draw_list->AddRectFilled(p0, p1, ImGui::GetColorU32(ColorFor(type)));
+    draw_list->AddRectFilled(p0, p1,
+                             ImGui::GetColorU32(EnumColor(type, kFsColors)));
     if (ImGui::IsMouseHoveringRect(p0, p1) && ImGui::IsWindowHovered()) {
       ImGui::SetTooltip("Block %d: %s", i, vamiga::FSBlockTypeEnum::_key(type));
       if (ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
@@ -217,25 +243,16 @@ void VolumeInspector::DrawUsage() {
   int rows = (static_cast<int>(usage_map_.size()) + cols - 1) / cols;
   ImGui::Dummy(ImVec2(0, rows * cell));
 
-  if (ImGui::BeginTable("UsageLegend", 2, ImGuiTableFlags_SizingFixedFit)) {
-    ImGui::TableSetupColumn("Color", ImGuiTableColumnFlags_WidthFixed, 24.0f);
-    ImGui::TableSetupColumn("Type", ImGuiTableColumnFlags_WidthStretch);
-    for (auto type : {vamiga::FSBlockType::BOOT, vamiga::FSBlockType::ROOT,
-                      vamiga::FSBlockType::BITMAP, vamiga::FSBlockType::BITMAP_EXT,
-                      vamiga::FSBlockType::USERDIR, vamiga::FSBlockType::FILEHEADER,
-                      vamiga::FSBlockType::FILELIST, vamiga::FSBlockType::DATA_OFS,
-                      vamiga::FSBlockType::EMPTY, vamiga::FSBlockType::UNKNOWN}) {
-      ImGui::TableNextRow();
-      ImGui::TableSetColumnIndex(0);
-      ImGui::ColorButton("##col", ColorFor(type),
-                         ImGuiColorEditFlags_NoTooltip | ImGuiColorEditFlags_NoDragDrop,
-                         ImVec2(18, 18));
-      ImGui::TableSetColumnIndex(1);
-      int count = type_counts_[static_cast<size_t>(type)];
-      ImGui::Text("%s (%d)", vamiga::FSBlockTypeEnum::_key(type), count);
-    }
-    ImGui::EndTable();
-  }
+  constexpr std::array usage_order = {
+      vamiga::FSBlockType::BOOT,     vamiga::FSBlockType::ROOT,
+      vamiga::FSBlockType::BITMAP,   vamiga::FSBlockType::BITMAP_EXT,
+      vamiga::FSBlockType::USERDIR,  vamiga::FSBlockType::FILEHEADER,
+      vamiga::FSBlockType::FILELIST, vamiga::FSBlockType::DATA_OFS,
+      vamiga::FSBlockType::EMPTY,    vamiga::FSBlockType::UNKNOWN};
+  DrawLegend("UsageLegend", kFsColors, std::span<const vamiga::FSBlockType>(usage_order),
+             [&](vamiga::FSBlockType t) {
+               return type_counts_[static_cast<size_t>(t)];
+             });
 }
 
 void VolumeInspector::DrawAllocation() {
@@ -262,7 +279,8 @@ void VolumeInspector::DrawAllocation() {
     ImVec2 p0 = ImVec2(start.x + col * cell, start.y + row * cell);
     ImVec2 p1 = ImVec2(p0.x + cell - 1, p0.y + cell - 1);
     auto val = static_cast<AllocationState>(alloc_map_[static_cast<size_t>(i)]);
-    draw_list->AddRectFilled(p0, p1, ImGui::GetColorU32(ColorForAlloc(val)));
+    draw_list->AddRectFilled(p0, p1,
+                             ImGui::GetColorU32(EnumColor(val, kAllocColors)));
   }
   int rows = (static_cast<int>(alloc_map_.size()) + cols - 1) / cols;
   ImGui::Dummy(ImVec2(0, rows * cell));
@@ -279,7 +297,7 @@ void VolumeInspector::DrawAllocation() {
     for (const auto& entry : legend) {
       ImGui::TableNextRow();
       ImGui::TableSetColumnIndex(0);
-      ImGui::ColorButton("##col", ColorForAlloc(entry.code),
+      ImGui::ColorButton("##col", EnumColor(entry.code, kAllocColors),
                          ImGuiColorEditFlags_NoTooltip | ImGuiColorEditFlags_NoDragDrop,
                          ImVec2(18, 18));
       ImGui::TableSetColumnIndex(1);
@@ -312,7 +330,8 @@ void VolumeInspector::DrawHealth(vamiga::VAmiga& emu) {
     ImVec2 p0 = ImVec2(start.x + col * cell, start.y + row * cell);
     ImVec2 p1 = ImVec2(p0.x + cell - 1, p0.y + cell - 1);
     auto val = static_cast<HealthState>(health_map_[static_cast<size_t>(i)]);
-    draw_list->AddRectFilled(p0, p1, ImGui::GetColorU32(ColorForHealth(val)));
+    draw_list->AddRectFilled(p0, p1,
+                             ImGui::GetColorU32(EnumColor(val, kHealthColors)));
   }
   int rows = (static_cast<int>(health_map_.size()) + cols - 1) / cols;
   ImGui::Dummy(ImVec2(0, rows * cell));
@@ -328,7 +347,7 @@ void VolumeInspector::DrawHealth(vamiga::VAmiga& emu) {
     for (const auto& entry : legend) {
       ImGui::TableNextRow();
       ImGui::TableSetColumnIndex(0);
-      ImGui::ColorButton("##col", ColorForHealth(entry.code),
+      ImGui::ColorButton("##col", EnumColor(entry.code, kHealthColors),
                          ImGuiColorEditFlags_NoTooltip | ImGuiColorEditFlags_NoDragDrop,
                          ImVec2(18, 18));
       ImGui::TableSetColumnIndex(1);
@@ -377,13 +396,13 @@ void VolumeInspector::DrawBlockView() {
         ImGui::Text("%02X", data[idx]);
       }
       ImGui::TableSetColumnIndex(17);
-      char ascii[17]{};
+      std::array<char, 17> ascii{};
       for (int col = 0; col < 16; ++col) {
         uint8_t v = data[row * 16 + col];
-        ascii[col] = (v >= 32 && v < 127) ? static_cast<char>(v) : '.';
+        ascii[static_cast<size_t>(col)] =
+            (v >= 32 && v < 127) ? static_cast<char>(v) : '.';
       }
-      ascii[16] = 0;
-      ImGui::Text("%s", ascii);
+      ImGui::Text("%s", ascii.data());
     }
     ImGui::EndTable();
   }

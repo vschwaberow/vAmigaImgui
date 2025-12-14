@@ -1,12 +1,19 @@
 #ifndef LINUXGUI_COMPONENTS_INSPECTOR_H_
 #define LINUXGUI_COMPONENTS_INSPECTOR_H_
+#include <array>
+#include <charconv>
+#include <concepts>
+#include <cstring>
+#include <functional>
 #include <string>
-#include <vector>
+#include <string_view>
 #include <utility>
+#include <vector>
 #include "VAmiga.h"
 #undef unreachable
 #define unreachable std::unreachable()
 #include "imgui.h"
+#include "resources/IconsFontAwesome6.h"
 namespace gui {
 class Inspector {
  public:
@@ -29,6 +36,21 @@ class Inspector {
     kBus,
     kNone
   };
+  using TabDrawFn = void (Inspector::*)(vamiga::VAmiga&);
+  struct TabDescriptor {
+    Tab tab;
+    std::string_view label;
+    TabDrawFn draw;
+  };
+  static const std::array<TabDescriptor, 11> kTabDescriptors;
+  static std::string_view TabLabel(Tab tab);
+  static Tab TabFromIndex(std::size_t idx);
+  template <std::invocable<const TabDescriptor&> F>
+  static void ForEachTab(F&& fn) {
+    for (const auto& entry : kTabDescriptors) {
+      std::invoke(fn, entry);
+    }
+  }
   struct WindowState {
     bool open = true;
     int id = 0;
@@ -53,21 +75,74 @@ class Inspector {
   void DrawWatchpoints(vamiga::VAmiga& emu);
   void DrawEvents(vamiga::VAmiga& emu);
   void DrawSprite(const vamiga::SpriteInfo& info, int id);
-  void DrawRegister(std::string_view label, uint32_t val, int width = 32);
-  void DrawBit(std::string_view label, bool set);
+  template <std::integral T>
+  void DrawRegister(std::string_view label, T val, int width = 32) {
+    ImGui::Text("%s:", label.data());
+    ImGui::SameLine();
+    if (hex_mode_) {
+      switch (width) {
+        case 8: ImGui::TextColored(ImVec4(0.6f, 0.8f, 1.0f, 1.0f), "%02X",
+                                   static_cast<uint32_t>(val));
+                break;
+        case 16: ImGui::TextColored(ImVec4(0.6f, 0.8f, 1.0f, 1.0f), "%04X",
+                                    static_cast<uint32_t>(val));
+                break;
+        default: ImGui::TextColored(ImVec4(0.6f, 0.8f, 1.0f, 1.0f), "%08X",
+                                    static_cast<uint32_t>(val));
+      }
+    } else {
+      ImGui::TextColored(ImVec4(0.6f, 0.8f, 1.0f, 1.0f), "%u",
+                         static_cast<uint32_t>(val));
+    }
+  }
+  template <std::convertible_to<bool> T>
+  void DrawBit(std::string_view label, T set) {
+    const bool on = static_cast<bool>(set);
+    if (on) {
+      ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.2f, 1.0f, 0.2f, 1.0f));
+      ImGui::Text(ICON_FA_SQUARE_CHECK " %s", label.data());
+      ImGui::PopStyleColor();
+    } else {
+      ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.5f, 0.5f, 0.5f, 1.0f));
+      ImGui::Text(ICON_FA_SQUARE " %s", label.data());
+      ImGui::PopStyleColor();
+    }
+  }
   void DrawHexDump(vamiga::VAmiga& emu, uint32_t addr, int rows,
                    vamiga::Accessor accessor);
  public:
-  void SetDasmAddress(int addr) { dasm_addr_ = addr; follow_pc_ = false; }
+  template <std::integral T>
+  void SetDasmAddress(T addr) {
+    dasm_addr_ = static_cast<int>(addr);
+    follow_pc_ = false;
+  }
  private:
+  void DrawBus(vamiga::VAmiga& emu);
   void DrawCopperList(int list_idx, bool symbolic, int extra_rows,
                       const vamiga::CopperInfo& info, vamiga::VAmiga& emu);
+  template <std::unsigned_integral T, std::size_t N>
+  static bool HexInput(const char* id, std::array<char, N>& buffer, T& out) {
+    if (ImGui::InputText(
+            id, buffer.data(), buffer.size(),
+            ImGuiInputTextFlags_CharsHexadecimal |
+                ImGuiInputTextFlags_EnterReturnsTrue)) {
+      T parsed = 0;
+      if (auto [_, ec] = std::from_chars(buffer.data(),
+                                         buffer.data() + std::strlen(buffer.data()),
+                                         parsed, 16);
+          ec == std::errc()) {
+        out = parsed;
+        return true;
+      }
+    }
+    return false;
+  }
 
   int dasm_addr_ = 0;
   bool follow_pc_ = true;
   uint32_t mem_addr_ = 0;
   int mem_rows_ = 16;
-  char mem_search_buf_[16] = "";
+  std::array<char, 16> mem_search_buf_{};
   bool hex_mode_ = true;
   int selected_cia_ = 0;
   bool copper_symbolic_[2] = {true, true};

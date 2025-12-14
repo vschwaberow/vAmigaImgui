@@ -27,14 +27,14 @@ private:
     int floppy_type_ = 0; 
     int floppy_fs_ = 0; 
     int floppy_boot_ = 1; 
-    char floppy_label_[32] = "Empty";
+    std::string floppy_label_ = "Empty";
     
     int hd_capacity_idx_ = 2; 
     int hd_c_ = 0;
     int hd_h_ = 0;
     int hd_s_ = 0;
     int hd_fs_ = 2; 
-    char hd_label_[32] = "System";
+    std::string hd_label_ = "System";
     
     void UpdateHDCapacity();
     void CreateFloppy(vamiga::VAmiga& emu);

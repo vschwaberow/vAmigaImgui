@@ -1,10 +1,27 @@
 #include "disk_creator.h"
 #include <format>
-#include <cstring>
 #include "FloppyDriveTypes.h"
 #include "HardDriveTypes.h"
 #include "FSTypes.h"
 #include "BootBlockImageTypes.h"
+
+namespace ImGui {
+inline bool InputText(const char* label, std::string* str,
+                      ImGuiInputTextFlags flags = 0) {
+  return InputText(
+      label, str->data(), str->capacity() + 1,
+      flags | ImGuiInputTextFlags_CallbackResize,
+      [](ImGuiInputTextCallbackData* data) -> int {
+        if (data->EventFlag == ImGuiInputTextFlags_CallbackResize) {
+          auto* s = static_cast<std::string*>(data->UserData);
+          s->resize(static_cast<size_t>(data->BufTextLen));
+          data->Buf = s->data();
+        }
+        return 0;
+      },
+      str);
+}
+}  // namespace ImGui
 
 namespace gui {
 
@@ -22,9 +39,7 @@ void DiskCreator::OpenForFloppy(int drive_nr) {
     is_hard_disk_ = false;
     floppy_fs_ = 0; 
     floppy_boot_ = 1; 
-    std::string s = "Empty";
-    s.copy(floppy_label_, sizeof(floppy_label_) - 1);
-    floppy_label_[s.length()] = '\0';
+    floppy_label_ = "Empty";
     open_ = true;
 }
 
@@ -32,9 +47,7 @@ void DiskCreator::OpenForHardDisk(int drive_nr) {
     target_drive_nr_ = drive_nr;
     is_hard_disk_ = true;
     UpdateHDCapacity();
-    std::string s = "System";
-    s.copy(hd_label_, sizeof(hd_label_) - 1);
-    hd_label_[s.length()] = '\0';
+    hd_label_ = "System";
     open_ = true;
 }
 
@@ -76,7 +89,8 @@ void DiskCreator::Draw(vamiga::VAmiga& emu) {
             ImGui::Combo("File System", &floppy_fs_, "OFS\0FFS\0NODOS\0");
             if (floppy_fs_ != 2) {
                 ImGui::Combo("Boot Block", &floppy_boot_, "None\0AmigaDOS 1.3\0AmigaDOS 2.0\0");
-                ImGui::InputText("Label", floppy_label_, 32);
+                if (floppy_label_.empty()) floppy_label_.assign("Empty");
+                ImGui::InputText("Label", &floppy_label_);
             }
         } else {
             if (ImGui::Combo("Capacity", &hd_capacity_idx_, "10 MB\020 MB\040 MB\080 MB\0Custom\0")) {
@@ -92,7 +106,8 @@ void DiskCreator::Draw(vamiga::VAmiga& emu) {
             
             ImGui::Combo("File System", &hd_fs_, "NODOS\0OFS\0FFS\0");
             if (hd_fs_ != 0) {
-                ImGui::InputText("Label", hd_label_, 32);
+                if (hd_label_.empty()) hd_label_.assign("System");
+                ImGui::InputText("Label", &hd_label_);
             }
         }
         
@@ -126,7 +141,7 @@ void DiskCreator::CreateFloppy(vamiga::VAmiga& emu) {
         }
     }
     
-    emu.df[target_drive_nr_]->insertBlankDisk(fs, bb, floppy_label_);
+    emu.df[target_drive_nr_]->insertBlankDisk(fs, bb, floppy_label_.c_str());
 }
 
 void DiskCreator::CreateHardDisk(vamiga::VAmiga& emu) {
@@ -137,7 +152,7 @@ void DiskCreator::CreateHardDisk(vamiga::VAmiga& emu) {
         if (hd_fs_ == 1) fs = vamiga::FSFormat::OFS;
         if (hd_fs_ == 2) fs = vamiga::FSFormat::FFS;
         
-        emu.hd[target_drive_nr_]->format(fs, hd_label_);
+        emu.hd[target_drive_nr_]->format(fs, hd_label_.c_str());
         
     } catch (...) {
     }

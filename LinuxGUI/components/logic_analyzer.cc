@@ -1,4 +1,7 @@
 #include "logic_analyzer.h"
+#include <array>
+#include <charconv>
+#include <cstring>
 #include <format>
 #include <ranges>
 #include "Misc/LogicAnalyzer/LogicAnalyzerTypes.h"
@@ -128,25 +131,22 @@ void LogicAnalyzer::Update(vamiga::VAmiga& emu) {
 }
 
 void LogicAnalyzer::UpdateProbe(vamiga::VAmiga& emu, int channel, int probe_type, uint32_t addr) {
-    vamiga::Opt var;
-    switch (channel) {
-        case 0: var = vamiga::Opt::LA_PROBE0; break;
-        case 1: var = vamiga::Opt::LA_PROBE1; break;
-        case 2: var = vamiga::Opt::LA_PROBE2; break;
-        case 3: var = vamiga::Opt::LA_PROBE3; break;
-        default: return;
-    }
-    emu.set(var, probe_type);
+  static constexpr std::array probe_opts = {vamiga::Opt::LA_PROBE0,
+                                            vamiga::Opt::LA_PROBE1,
+                                            vamiga::Opt::LA_PROBE2,
+                                            vamiga::Opt::LA_PROBE3};
+  static constexpr std::array addr_opts = {vamiga::Opt::LA_ADDR0,
+                                           vamiga::Opt::LA_ADDR1,
+                                           vamiga::Opt::LA_ADDR2,
+                                           vamiga::Opt::LA_ADDR3};
+  if (channel < 0 || channel >= static_cast<int>(probe_opts.size())) return;
 
-    if (probe_type == 1) { 
-        switch (channel) {
-            case 0: var = vamiga::Opt::LA_ADDR0; break;
-            case 1: var = vamiga::Opt::LA_ADDR1; break;
-            case 2: var = vamiga::Opt::LA_ADDR2; break;
-            case 3: var = vamiga::Opt::LA_ADDR3; break;
-        }
-        emu.set(var, static_cast<int>(addr));
-    }
+  emu.set(probe_opts[static_cast<std::size_t>(channel)], probe_type);
+
+  if (probe_type == 1) {
+    emu.set(addr_opts[static_cast<std::size_t>(channel)],
+            static_cast<int>(addr));
+  }
 }
 
 
@@ -164,6 +164,23 @@ void LogicAnalyzer::DrawControls(vamiga::VAmiga& emu) {
   ImGui::SameLine();
   if (ImGui::Button(symbolic_ ? "SYM" : "RAW")) symbolic_ = !symbolic_;
   ImGui::SetItemTooltip("Toggle Symbolic/Raw");
+
+  auto hex_input = [](const char* id, std::array<char, 17>& buffer,
+                      uint32_t& out) {
+    if (ImGui::InputText(id, buffer.data(), buffer.size(),
+                         ImGuiInputTextFlags_CharsHexadecimal |
+                             ImGuiInputTextFlags_EnterReturnsTrue)) {
+      uint32_t parsed = 0;
+      if (auto [_, ec] = std::from_chars(buffer.data(),
+                                         buffer.data() + std::strlen(buffer.data()),
+                                         parsed, 16);
+          ec == std::errc()) {
+        out = parsed;
+        return true;
+      }
+    }
+    return false;
+  };
 
   for (int i : std::views::iota(0, 4)) {
       ImGui::SameLine();
@@ -203,15 +220,13 @@ void LogicAnalyzer::DrawControls(vamiga::VAmiga& emu) {
       if (probe_types_[i] == 1) { 
            ImGui::SameLine();
            ImGui::SetNextItemWidth(60);
-           char buf[16];
-           auto result = std::format_to_n(buf, sizeof(buf)-1, "{:06X}", probe_addrs_[i]);
-           *result.out = '\0';
-           if (ImGui::InputText("##addr", buf, 16, ImGuiInputTextFlags_CharsHexadecimal | ImGuiInputTextFlags_EnterReturnsTrue)) {
-               uint32_t val;
-               if (sscanf(buf, "%x", &val) == 1) {
-                   probe_addrs_[i] = val;
-                   UpdateProbe(emu, i, 1, val);
-               }
+           std::array<char, 17> buf{};
+           auto formatted = std::format("{:06X}", probe_addrs_[i]);
+           std::ranges::copy(formatted, buf.begin());
+           uint32_t val = probe_addrs_[i];
+           if (hex_input("##addr", buf, val)) {
+             probe_addrs_[i] = val;
+             UpdateProbe(emu, i, 1, val);
            }
       }
       ImGui::PopID();
