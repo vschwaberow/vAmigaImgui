@@ -413,14 +413,13 @@ void Inspector::DrawBreakpoints(vamiga::VAmiga& emu) {
     ImGui::TableSetColumnIndex(0);
     ImGui::TextDisabled("+");
     ImGui::TableSetColumnIndex(1);
-    static char buf[16] = "";
+    static std::array<char, 17> bp_add_buf{};
     ImGui::SetNextItemWidth(-1);
-    if (ImGui::InputText("##add", buf, 16, ImGuiInputTextFlags_CharsHexadecimal | ImGuiInputTextFlags_EnterReturnsTrue)) {
-      uint32_t addr = 0;
-      std::from_chars(buf, buf + 16, addr, 16);
-      if (addr > 0 || buf[0] == '0') {
-         emu.cpu.breakpoints.setAt(addr);
-         buf[0] = 0;
+    uint32_t addr = 0;
+    if (HexInput("##add", bp_add_buf, addr)) {
+      if (addr > 0 || bp_add_buf[0] == '0') {
+        emu.cpu.breakpoints.setAt(addr);
+        bp_add_buf = {};
       }
     }
     ImGui::TableSetColumnIndex(2);
@@ -599,10 +598,13 @@ void Inspector::DrawMemory(vamiga::VAmiga& emu) {
   bank_start = sync_address();
   ImGui::SameLine();
   ImGui::SetNextItemWidth(140.0f);
-  if (ImGui::InputText("Find 16-bit", mem_search_buf_, sizeof(mem_search_buf_),
-                       ImGuiInputTextFlags_CharsHexadecimal | ImGuiInputTextFlags_EnterReturnsTrue)) {
+  if (ImGui::InputText("Find 16-bit", mem_search_buf_.data(), mem_search_buf_.size(),
+                       ImGuiInputTextFlags_CharsHexadecimal |
+                           ImGuiInputTextFlags_EnterReturnsTrue)) {
     uint32_t search_val = 0;
-    auto res = std::from_chars(mem_search_buf_, mem_search_buf_ + sizeof(mem_search_buf_), search_val, 16);
+    auto res = std::from_chars(mem_search_buf_.data(),
+                               mem_search_buf_.data() + mem_search_buf_.size(),
+                               search_val, 16);
     if (res.ec == std::errc()) {
       for (uint32_t offset = 0; offset < 0x10000; offset += 2) {
         if (emu.mem.debugger.spypeek16(accessor, bank_start + offset) == search_val) {

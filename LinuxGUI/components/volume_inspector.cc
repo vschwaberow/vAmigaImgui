@@ -396,13 +396,13 @@ void VolumeInspector::DrawBlockView() {
         ImGui::Text("%02X", data[idx]);
       }
       ImGui::TableSetColumnIndex(17);
-      char ascii[17]{};
+      std::array<char, 17> ascii{};
       for (int col = 0; col < 16; ++col) {
         uint8_t v = data[row * 16 + col];
-        ascii[col] = (v >= 32 && v < 127) ? static_cast<char>(v) : '.';
+        ascii[static_cast<size_t>(col)] =
+            (v >= 32 && v < 127) ? static_cast<char>(v) : '.';
       }
-      ascii[16] = 0;
-      ImGui::Text("%s", ascii);
+      ImGui::Text("%s", ascii.data());
     }
     ImGui::EndTable();
   }

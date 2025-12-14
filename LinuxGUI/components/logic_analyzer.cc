@@ -1,4 +1,7 @@
 #include "logic_analyzer.h"
+#include <array>
+#include <charconv>
+#include <cstring>
 #include <format>
 #include <ranges>
 #include "Misc/LogicAnalyzer/LogicAnalyzerTypes.h"
@@ -162,6 +165,23 @@ void LogicAnalyzer::DrawControls(vamiga::VAmiga& emu) {
   if (ImGui::Button(symbolic_ ? "SYM" : "RAW")) symbolic_ = !symbolic_;
   ImGui::SetItemTooltip("Toggle Symbolic/Raw");
 
+  auto hex_input = [](const char* id, std::array<char, 17>& buffer,
+                      uint32_t& out) {
+    if (ImGui::InputText(id, buffer.data(), buffer.size(),
+                         ImGuiInputTextFlags_CharsHexadecimal |
+                             ImGuiInputTextFlags_EnterReturnsTrue)) {
+      uint32_t parsed = 0;
+      if (auto [_, ec] = std::from_chars(buffer.data(),
+                                         buffer.data() + std::strlen(buffer.data()),
+                                         parsed, 16);
+          ec == std::errc()) {
+        out = parsed;
+        return true;
+      }
+    }
+    return false;
+  };
+
   for (int i : std::views::iota(0, 4)) {
       ImGui::SameLine();
       ImGui::PushID(i);
@@ -200,15 +220,13 @@ void LogicAnalyzer::DrawControls(vamiga::VAmiga& emu) {
       if (probe_types_[i] == 1) { 
            ImGui::SameLine();
            ImGui::SetNextItemWidth(60);
-           char buf[16];
-           auto result = std::format_to_n(buf, sizeof(buf)-1, "{:06X}", probe_addrs_[i]);
-           *result.out = '\0';
-           if (ImGui::InputText("##addr", buf, 16, ImGuiInputTextFlags_CharsHexadecimal | ImGuiInputTextFlags_EnterReturnsTrue)) {
-               uint32_t val;
-               if (sscanf(buf, "%x", &val) == 1) {
-                   probe_addrs_[i] = val;
-                   UpdateProbe(emu, i, 1, val);
-               }
+           std::array<char, 17> buf{};
+           auto formatted = std::format("{:06X}", probe_addrs_[i]);
+           std::ranges::copy(formatted, buf.begin());
+           uint32_t val = probe_addrs_[i];
+           if (hex_input("##addr", buf, val)) {
+             probe_addrs_[i] = val;
+             UpdateProbe(emu, i, 1, val);
            }
       }
       ImGui::PopID();

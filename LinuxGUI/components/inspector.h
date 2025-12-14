@@ -142,7 +142,7 @@ class Inspector {
   bool follow_pc_ = true;
   uint32_t mem_addr_ = 0;
   int mem_rows_ = 16;
-  char mem_search_buf_[16] = "";
+  std::array<char, 16> mem_search_buf_{};
   bool hex_mode_ = true;
   int selected_cia_ = 0;
   bool copper_symbolic_[2] = {true, true};
