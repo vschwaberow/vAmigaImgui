@@ -30,6 +30,30 @@ Inspector& Inspector::Instance() {
   return instance;
 }
 Inspector::Inspector() {}
+const std::array<Inspector::TabDescriptor, 11> Inspector::kTabDescriptors = {{
+    {Tab::kCPU, "CPU", &Inspector::DrawCPU},
+    {Tab::kMemory, "Memory", &Inspector::DrawMemory},
+    {Tab::kAgnus, "Agnus", &Inspector::DrawAgnus},
+    {Tab::kDenise, "Denise", &Inspector::DrawDenise},
+    {Tab::kPaula, "Paula", &Inspector::DrawPaula},
+    {Tab::kCIA, "CIA", &Inspector::DrawCIA},
+    {Tab::kCopper, "Copper", &Inspector::DrawCopper},
+    {Tab::kBlitter, "Blitter", &Inspector::DrawBlitter},
+    {Tab::kEvents, "Events", &Inspector::DrawEvents},
+    {Tab::kPorts, "Ports", &Inspector::DrawPorts},
+    {Tab::kBus, "Bus", &Inspector::DrawBus},
+}};
+
+std::string_view Inspector::TabLabel(Tab tab) {
+  for (const auto& entry : kTabDescriptors) {
+    if (entry.tab == tab) return entry.label;
+  }
+  return "Unknown";
+}
+
+Inspector::Tab Inspector::TabFromIndex(std::size_t idx) {
+  return idx < kTabDescriptors.size() ? kTabDescriptors[idx].tab : Tab::kNone;
+}
 
 void Inspector::OpenWindow() {
   windows_.push_back(WindowState{.open = true, .id = next_id_++, .active_tab = Tab::kCPU});
@@ -76,24 +100,10 @@ void Inspector::DrawWindow(WindowState& state, vamiga::VAmiga& emu) {
     std::string tab_id = std::format("InspectorTabs{}", state.id);
     if (ImGui::BeginTabBar(tab_id.c_str())) {
       ForEachTab([&](const TabDescriptor& desc) {
-        if (ImGui::BeginTabItem(desc.label.data())) {
-          state.active_tab = desc.tab;
-          switch (desc.tab) {
-            case Tab::kCPU: DrawCPU(emu); break;
-            case Tab::kMemory: DrawMemory(emu); break;
-            case Tab::kAgnus: DrawAgnus(emu); break;
-            case Tab::kDenise: DrawDenise(emu); break;
-            case Tab::kPaula: DrawPaula(emu); break;
-            case Tab::kCIA: DrawCIA(emu); break;
-            case Tab::kCopper: DrawCopper(emu); break;
-            case Tab::kBlitter: DrawBlitter(emu); break;
-            case Tab::kEvents: DrawEvents(emu); break;
-            case Tab::kPorts: DrawPorts(emu); break;
-            case Tab::kBus: LogicAnalyzer::Instance().Draw(emu); break;
-            case Tab::kNone: break;
-          }
-          ImGui::EndTabItem();
-        }
+        if (!ImGui::BeginTabItem(desc.label.data())) return;
+        state.active_tab = desc.tab;
+        std::invoke(desc.draw, this, emu);
+        ImGui::EndTabItem();
       });
       ImGui::EndTabBar();
     }
@@ -101,28 +111,6 @@ void Inspector::DrawWindow(WindowState& state, vamiga::VAmiga& emu) {
     if (emu.isTracking()) emu.trackOff();
   }
   ImGui::End();
-}
-void Inspector::DrawRegister(std::string_view label, uint32_t val, int width) {
-  ImGui::Text("%s:", label.data());
-  ImGui::SameLine();
-  if (hex_mode_) {
-    if (width == 8) ImGui::TextColored(ImVec4(0.6f, 0.8f, 1.0f, 1.0f), "%02X", val);
-    else if (width == 16) ImGui::TextColored(ImVec4(0.6f, 0.8f, 1.0f, 1.0f), "%04X", val);
-    else ImGui::TextColored(ImVec4(0.6f, 0.8f, 1.0f, 1.0f), "%08X", val);
-  } else {
-    ImGui::TextColored(ImVec4(0.6f, 0.8f, 1.0f, 1.0f), "%u", val);
-  }
-}
-void Inspector::DrawBit(std::string_view label, bool set) {
-  if (set) {
-    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.2f, 1.0f, 0.2f, 1.0f));
-    ImGui::Text(ICON_FA_SQUARE_CHECK " %s", label.data());
-    ImGui::PopStyleColor();
-  } else {
-    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.5f, 0.5f, 0.5f, 1.0f));
-    ImGui::Text(ICON_FA_SQUARE " %s", label.data());
-    ImGui::PopStyleColor();
-  }
 }
 void Inspector::DrawToolbar(vamiga::VAmiga& emu, WindowState& state) {
   ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(8, 0));
@@ -155,13 +143,13 @@ void Inspector::DrawToolbar(vamiga::VAmiga& emu, WindowState& state) {
           "Preset", &preset_idx,
           [](void* data, int idx, const char** out_text) {
             auto* arr = static_cast<const TabDescriptor*>(data);
-            auto count = static_cast<int>(Inspector::kTabs.size());
+            auto count = static_cast<int>(Inspector::kTabDescriptors.size());
             if (idx < 0 || idx >= count) return false;
             *out_text = arr[idx].label.data();
             return true;
           },
-          const_cast<TabDescriptor*>(Inspector::kTabs.data()),
-          static_cast<int>(Inspector::kTabs.size()))) {
+          const_cast<TabDescriptor*>(Inspector::kTabDescriptors.data()),
+          static_cast<int>(Inspector::kTabDescriptors.size()))) {
     state.active_tab = TabFromIndex(static_cast<std::size_t>(preset_idx));
   }
   ImGui::SameLine(0, 20);
@@ -442,27 +430,29 @@ void Inspector::DrawBreakpoints(vamiga::VAmiga& emu) {
 void Inspector::DrawMemoryMap(const vamiga::MemInfo& info, vamiga::Accessor accessor) {
   const auto* src_table = accessor == vamiga::Accessor::AGNUS ? info.agnusMemSrc : info.cpuMemSrc;
 
+  static constexpr std::array<ImVec4, 17> kMemColors{
+      ImVec4(0.25f, 0.55f, 1.0f, 0.9f),   // CHIP
+      ImVec4(0.25f, 0.55f, 1.0f, 0.4f),   // CHIP_MIRROR
+      ImVec4(0.32f, 0.78f, 0.46f, 0.9f),  // SLOW
+      ImVec4(0.32f, 0.78f, 0.46f, 0.4f),  // SLOW_MIRROR
+      ImVec4(0.75f, 0.46f, 0.96f, 0.9f),  // FAST
+      ImVec4(0.93f, 0.76f, 0.32f, 0.9f),  // CIA
+      ImVec4(0.93f, 0.76f, 0.32f, 0.5f),  // CIA_MIRROR
+      ImVec4(0.96f, 0.58f, 0.58f, 0.9f),  // RTC
+      ImVec4(0.94f, 0.33f, 0.33f, 0.9f),  // CUSTOM
+      ImVec4(0.94f, 0.33f, 0.33f, 0.5f),  // CUSTOM_MIRROR
+      ImVec4(0.56f, 0.56f, 0.56f, 0.9f),  // AUTOCONF
+      ImVec4(0.54f, 0.38f, 0.72f, 0.9f),  // ZOR
+      ImVec4(0.98f, 0.52f, 0.18f, 0.9f),  // ROM
+      ImVec4(0.98f, 0.52f, 0.18f, 0.5f),  // ROM_MIRROR
+      ImVec4(0.70f, 0.70f, 0.70f, 0.9f),  // WOM
+      ImVec4(0.29f, 0.77f, 0.77f, 0.9f),  // EXT
+      ImVec4(0.18f, 0.18f, 0.18f, 0.9f)}; // NONE
+
   auto color_for = [](vamiga::MemSrc src) -> ImVec4 {
-    switch (src) {
-      case vamiga::MemSrc::CHIP: return {0.25f, 0.55f, 1.0f, 0.9f};
-      case vamiga::MemSrc::CHIP_MIRROR: return {0.25f, 0.55f, 1.0f, 0.4f};
-      case vamiga::MemSrc::SLOW: return {0.32f, 0.78f, 0.46f, 0.9f};
-      case vamiga::MemSrc::SLOW_MIRROR: return {0.32f, 0.78f, 0.46f, 0.4f};
-      case vamiga::MemSrc::FAST: return {0.75f, 0.46f, 0.96f, 0.9f};
-      case vamiga::MemSrc::CIA: return {0.93f, 0.76f, 0.32f, 0.9f};
-      case vamiga::MemSrc::CIA_MIRROR: return {0.93f, 0.76f, 0.32f, 0.5f};
-      case vamiga::MemSrc::RTC: return {0.96f, 0.58f, 0.58f, 0.9f};
-      case vamiga::MemSrc::CUSTOM: return {0.94f, 0.33f, 0.33f, 0.9f};
-      case vamiga::MemSrc::CUSTOM_MIRROR: return {0.94f, 0.33f, 0.33f, 0.5f};
-      case vamiga::MemSrc::AUTOCONF: return {0.56f, 0.56f, 0.56f, 0.9f};
-      case vamiga::MemSrc::ZOR: return {0.54f, 0.38f, 0.72f, 0.9f};
-      case vamiga::MemSrc::ROM: return {0.98f, 0.52f, 0.18f, 0.9f};
-      case vamiga::MemSrc::ROM_MIRROR: return {0.98f, 0.52f, 0.18f, 0.5f};
-      case vamiga::MemSrc::WOM: return {0.70f, 0.70f, 0.70f, 0.9f};
-      case vamiga::MemSrc::EXT: return {0.29f, 0.77f, 0.77f, 0.9f};
-      case vamiga::MemSrc::NONE: return {0.18f, 0.18f, 0.18f, 0.9f};
-    }
-    return {0.18f, 0.18f, 0.18f, 0.9f};
+    auto idx = static_cast<std::size_t>(std::to_underlying(src));
+    if (idx < kMemColors.size()) return kMemColors[idx];
+    return kMemColors.back();
   };
 
   auto brighten = [](ImVec4 col, float factor) {
@@ -1263,27 +1253,14 @@ void Inspector::DrawWatchpoints(vamiga::VAmiga& emu) {
       }
       ImGui::PopStyleColor();
       ImGui::TableSetColumnIndex(2);
-      ImGui::PushItemWidth(-1);
-      ImGui::SetNextItemWidth(-1);
-      static char edit_buf[16] = "";
-      {
-        std::string formatted = std::format("{:08X}", info->addr);
-        const auto len = std::min(formatted.size(), sizeof(edit_buf) - 1);
-        std::copy_n(formatted.data(), len, edit_buf);
-        edit_buf[len] = '\0';
-      }
-      if (ImGui::InputText("##edit", edit_buf, sizeof(edit_buf),
-                           ImGuiInputTextFlags_CharsHexadecimal |
-                               ImGuiInputTextFlags_EnterReturnsTrue)) {
-        uint32_t new_addr = 0;
-        if (auto [p, ec] =
-                std::from_chars(edit_buf, edit_buf + std::strlen(edit_buf),
-                                new_addr, 16);
-            ec == std::errc()) {
-          if (!emu.cpu.watchpoints.guardAt(new_addr)) {
-            emu.cpu.watchpoints.moveTo(i, new_addr);
-            SetDasmAddress(static_cast<int>(new_addr));
-          }
+      std::array<char, 17> edit_buf{};
+      auto formatted = std::format("{:08X}", info->addr);
+      std::ranges::copy(formatted, edit_buf.begin());
+      uint32_t new_addr = 0;
+      if (HexInput("##edit", edit_buf, new_addr)) {
+        if (!emu.cpu.watchpoints.guardAt(new_addr)) {
+          emu.cpu.watchpoints.moveTo(i, new_addr);
+          SetDasmAddress(static_cast<int>(new_addr));
         }
       }
       ImGui::TableSetColumnIndex(3);
@@ -1300,17 +1277,13 @@ void Inspector::DrawWatchpoints(vamiga::VAmiga& emu) {
     ImGui::TableSetColumnIndex(0);
     ImGui::TextDisabled("+");
     ImGui::TableSetColumnIndex(1);
-    static char buf[16] = "";
+    static std::array<char, 17> add_buf{};
     ImGui::SetNextItemWidth(-1);
-    if (ImGui::InputText("##add", buf, 16, ImGuiInputTextFlags_CharsHexadecimal | ImGuiInputTextFlags_EnterReturnsTrue)) {
-      uint32_t addr = 0;
-      std::from_chars(buf, buf + 16, addr, 16);
-      if (addr > 0 || buf[0] == '0') {
-        auto existing = emu.cpu.watchpoints.guardAt(addr);
-        if (!existing) {
-          emu.cpu.watchpoints.setAt(addr);
-        }
-        buf[0] = 0;
+    uint32_t addr = 0;
+    if (HexInput("##add", add_buf, addr)) {
+      if (addr > 0 || add_buf[0] == '0') {
+        if (!emu.cpu.watchpoints.guardAt(addr)) emu.cpu.watchpoints.setAt(addr);
+        add_buf = {};
       }
     }
     ImGui::TableSetColumnIndex(2);
@@ -1424,29 +1397,14 @@ void Inspector::DrawCopperBreakpoints(vamiga::VAmiga& emu) {
       }
       ImGui::PopStyleColor();
       ImGui::TableSetColumnIndex(2);
-      ImGui::PushItemWidth(-1);
-      ImGui::SetNextItemWidth(-1);
-      static char cop_edit_buf[16] = "";
-      {
-        std::string formatted = std::format("{:08X}", info->addr);
-        const auto len =
-            std::min(formatted.size(), sizeof(cop_edit_buf) - 1);
-        std::copy_n(formatted.data(), len, cop_edit_buf);
-        cop_edit_buf[len] = '\0';
-      }
-      if (ImGui::InputText("##cop_edit", cop_edit_buf, sizeof(cop_edit_buf),
-                           ImGuiInputTextFlags_CharsHexadecimal |
-                               ImGuiInputTextFlags_EnterReturnsTrue)) {
-        uint32_t new_addr = 0;
-        if (auto [p, ec] =
-                std::from_chars(cop_edit_buf,
-                                cop_edit_buf + std::strlen(cop_edit_buf),
-                                new_addr, 16);
-            ec == std::errc()) {
-          if (!emu.copperBreakpoints.guardAt(new_addr)) {
-            emu.copperBreakpoints.moveTo(i, new_addr);
-            Inspector::Instance().SetDasmAddress(new_addr);
-          }
+      std::array<char, 17> cop_edit_buf{};
+      auto formatted = std::format("{:08X}", info->addr);
+      std::ranges::copy(formatted, cop_edit_buf.begin());
+      uint32_t new_addr = 0;
+      if (HexInput("##cop_edit", cop_edit_buf, new_addr)) {
+        if (!emu.copperBreakpoints.guardAt(new_addr)) {
+          emu.copperBreakpoints.moveTo(i, new_addr);
+          Inspector::Instance().SetDasmAddress(new_addr);
         }
       }
       ImGui::TableSetColumnIndex(3);
@@ -1462,14 +1420,13 @@ void Inspector::DrawCopperBreakpoints(vamiga::VAmiga& emu) {
     ImGui::TableSetColumnIndex(0);
     ImGui::TextDisabled("+");
     ImGui::TableSetColumnIndex(1);
-    static char buf[16] = "";
+    static std::array<char, 17> cop_add_buf{};
     ImGui::SetNextItemWidth(-1);
-    if (ImGui::InputText("##add", buf, 16, ImGuiInputTextFlags_CharsHexadecimal | ImGuiInputTextFlags_EnterReturnsTrue)) {
-      uint32_t addr = 0;
-      std::from_chars(buf, buf + 16, addr, 16);
-      if (addr > 0 || buf[0] == '0') {
-         emu.copperBreakpoints.setAt(addr);
-         buf[0] = 0;
+    uint32_t addr = 0;
+    if (HexInput("##add", cop_add_buf, addr)) {
+      if (addr > 0 || cop_add_buf[0] == '0') {
+        emu.copperBreakpoints.setAt(addr);
+        cop_add_buf = {};
       }
     }
     ImGui::TableSetColumnIndex(2);
@@ -1533,5 +1490,8 @@ void Inspector::DrawPorts(vamiga::VAmiga& emu) {
       
       ImGui::EndTable();
   }
+}
+void Inspector::DrawBus(vamiga::VAmiga& emu) {
+  LogicAnalyzer::Instance().Draw(emu);
 }
 }
