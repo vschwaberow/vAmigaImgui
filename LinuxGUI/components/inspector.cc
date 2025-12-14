@@ -74,8 +74,7 @@ void Inspector::DrawWindow(WindowState& state, vamiga::VAmiga& emu) {
     std::string tab_id = std::format("InspectorTabs{}", state.id);
     if (ImGui::BeginTabBar(tab_id.c_str())) {
       auto tab_item = [&](Tab tab, const char* label) {
-        ImGuiTabItemFlags flags = (state.active_tab == tab) ? ImGuiTabItemFlags_SetSelected : 0;
-        if (ImGui::BeginTabItem(label, nullptr, flags)) {
+        if (ImGui::BeginTabItem(label)) {
           state.active_tab = tab;
           switch (tab) {
             case Tab::kCPU: DrawCPU(emu); break;
