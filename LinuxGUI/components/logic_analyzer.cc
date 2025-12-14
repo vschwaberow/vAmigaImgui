@@ -128,25 +128,22 @@ void LogicAnalyzer::Update(vamiga::VAmiga& emu) {
 }
 
 void LogicAnalyzer::UpdateProbe(vamiga::VAmiga& emu, int channel, int probe_type, uint32_t addr) {
-    vamiga::Opt var;
-    switch (channel) {
-        case 0: var = vamiga::Opt::LA_PROBE0; break;
-        case 1: var = vamiga::Opt::LA_PROBE1; break;
-        case 2: var = vamiga::Opt::LA_PROBE2; break;
-        case 3: var = vamiga::Opt::LA_PROBE3; break;
-        default: return;
-    }
-    emu.set(var, probe_type);
+  static constexpr std::array probe_opts = {vamiga::Opt::LA_PROBE0,
+                                            vamiga::Opt::LA_PROBE1,
+                                            vamiga::Opt::LA_PROBE2,
+                                            vamiga::Opt::LA_PROBE3};
+  static constexpr std::array addr_opts = {vamiga::Opt::LA_ADDR0,
+                                           vamiga::Opt::LA_ADDR1,
+                                           vamiga::Opt::LA_ADDR2,
+                                           vamiga::Opt::LA_ADDR3};
+  if (channel < 0 || channel >= static_cast<int>(probe_opts.size())) return;
 
-    if (probe_type == 1) { 
-        switch (channel) {
-            case 0: var = vamiga::Opt::LA_ADDR0; break;
-            case 1: var = vamiga::Opt::LA_ADDR1; break;
-            case 2: var = vamiga::Opt::LA_ADDR2; break;
-            case 3: var = vamiga::Opt::LA_ADDR3; break;
-        }
-        emu.set(var, static_cast<int>(addr));
-    }
+  emu.set(probe_opts[static_cast<std::size_t>(channel)], probe_type);
+
+  if (probe_type == 1) {
+    emu.set(addr_opts[static_cast<std::size_t>(channel)],
+            static_cast<int>(addr));
+  }
 }
 
 
