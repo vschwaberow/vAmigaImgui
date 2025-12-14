@@ -39,6 +39,28 @@ std::string_view BootBlockName(vamiga::BootBlockType type) {
     default: return "Unknown";
   }
 }
+
+enum class AllocationState : uint8_t { Free = 0, Allocated = 1, Ambiguous = 2, Conflict = 3 };
+enum class HealthState : uint8_t { Unused = 0, Ok = 1, Error = 2 };
+
+ImVec4 ColorForAlloc(AllocationState s) {
+  switch (s) {
+    case AllocationState::Free: return ImVec4(0.60f, 0.60f, 0.60f, 1.0f);
+    case AllocationState::Allocated: return ImVec4(0.40f, 0.80f, 0.40f, 1.0f);
+    case AllocationState::Ambiguous: return ImVec4(0.95f, 0.85f, 0.40f, 1.0f);
+    case AllocationState::Conflict: return ImVec4(0.90f, 0.25f, 0.25f, 1.0f);
+  }
+  return ImVec4(0.75f, 0.75f, 0.75f, 1.0f);
+}
+
+ImVec4 ColorForHealth(HealthState s) {
+  switch (s) {
+    case HealthState::Unused: return ImVec4(0.60f, 0.60f, 0.60f, 1.0f);
+    case HealthState::Ok: return ImVec4(0.40f, 0.80f, 0.40f, 1.0f);
+    case HealthState::Error: return ImVec4(0.90f, 0.25f, 0.25f, 1.0f);
+  }
+  return ImVec4(0.75f, 0.75f, 0.75f, 1.0f);
+}
 }  // namespace
 
 VolumeInspector& VolumeInspector::Instance() {
@@ -57,6 +79,8 @@ void VolumeInspector::Open(int drive_nr, bool is_hd, vamiga::VAmiga& emu, int pa
 void VolumeInspector::Refresh(vamiga::VAmiga& emu) {
   fs_.reset();
   usage_map_.clear();
+  alloc_map_.clear();
+  health_map_.clear();
   type_counts_.fill(0);
 
   try {
@@ -76,9 +100,14 @@ void VolumeInspector::Refresh(vamiga::VAmiga& emu) {
   if (fs_) {
     info_ = fs_->getInfo();
     auto traits = fs_->getTraits();
-    usage_map_.resize(static_cast<size_t>(info_.numBlocks));
+    const size_t block_count = static_cast<size_t>(info_.numBlocks);
+    usage_map_.resize(block_count);
+    alloc_map_.resize(block_count);
+    health_map_.resize(block_count);
     if (!usage_map_.empty()) {
       fs_->createUsageMap(usage_map_.data(), static_cast<vamiga::isize>(usage_map_.size()));
+      fs_->createAllocationMap(alloc_map_.data(), static_cast<vamiga::isize>(alloc_map_.size()));
+      fs_->createHealthMap(health_map_.data(), static_cast<vamiga::isize>(health_map_.size()));
       for (auto v : usage_map_) {
         auto idx = static_cast<size_t>(v);
         if (idx < type_counts_.size()) type_counts_[idx]++;
@@ -129,6 +158,10 @@ void VolumeInspector::Draw(vamiga::VAmiga& emu) {
     DrawInfo();
     ImGui::Separator();
     DrawUsage();
+    ImGui::Separator();
+    DrawAllocation();
+    ImGui::Separator();
+    DrawHealth(emu);
     ImGui::Separator();
     DrawBlockView();
 
@@ -199,6 +232,106 @@ void VolumeInspector::DrawUsage() {
       ImGui::TableSetColumnIndex(1);
       int count = type_counts_[static_cast<size_t>(type)];
       ImGui::Text("%s (%d)", vamiga::FSBlockTypeEnum::_key(type), count);
+    }
+    ImGui::EndTable();
+  }
+}
+
+void VolumeInspector::DrawAllocation() {
+  if (alloc_map_.empty()) return;
+
+  ImGui::Text("Allocation Map");
+  ImGui::SameLine();
+  if (ImGui::Button(ICON_FA_WRENCH " Rectify")) {
+    if (fs_) {
+      fs_->rectifyAllocationMap();
+      fs_->createAllocationMap(alloc_map_.data(),
+                               static_cast<vamiga::isize>(alloc_map_.size()));
+    }
+  }
+
+  const float cell = 10.0f;
+  int cols = std::max(1, static_cast<int>(ImGui::GetContentRegionAvail().x / cell));
+  auto draw_list = ImGui::GetWindowDrawList();
+  ImVec2 start = ImGui::GetCursorScreenPos();
+
+  for (int i = 0; i < static_cast<int>(alloc_map_.size()); ++i) {
+    int row = i / cols;
+    int col = i % cols;
+    ImVec2 p0 = ImVec2(start.x + col * cell, start.y + row * cell);
+    ImVec2 p1 = ImVec2(p0.x + cell - 1, p0.y + cell - 1);
+    auto val = static_cast<AllocationState>(alloc_map_[static_cast<size_t>(i)]);
+    draw_list->AddRectFilled(p0, p1, ImGui::GetColorU32(ColorForAlloc(val)));
+  }
+  int rows = (static_cast<int>(alloc_map_.size()) + cols - 1) / cols;
+  ImGui::Dummy(ImVec2(0, rows * cell));
+
+  if (ImGui::BeginTable("AllocLegend", 2, ImGuiTableFlags_SizingFixedFit)) {
+    ImGui::TableSetupColumn("Color", ImGuiTableColumnFlags_WidthFixed, 24.0f);
+    ImGui::TableSetupColumn("State", ImGuiTableColumnFlags_WidthStretch);
+    struct Legend { std::string_view label; AllocationState code; };
+    constexpr std::array legend = {
+        Legend{"Free", AllocationState::Free},
+        Legend{"Allocated", AllocationState::Allocated},
+        Legend{"Ambiguous", AllocationState::Ambiguous},
+        Legend{"Conflict", AllocationState::Conflict}};
+    for (const auto& entry : legend) {
+      ImGui::TableNextRow();
+      ImGui::TableSetColumnIndex(0);
+      ImGui::ColorButton("##col", ColorForAlloc(entry.code),
+                         ImGuiColorEditFlags_NoTooltip | ImGuiColorEditFlags_NoDragDrop,
+                         ImVec2(18, 18));
+      ImGui::TableSetColumnIndex(1);
+      ImGui::Text("%s", entry.label.data());
+    }
+    ImGui::EndTable();
+  }
+}
+
+void VolumeInspector::DrawHealth(vamiga::VAmiga& emu) {
+  if (health_map_.empty()) return;
+
+  ImGui::Text("Health Map");
+  ImGui::SameLine();
+  if (ImGui::Button(ICON_FA_ROTATE " Re-run Check")) {
+    if (fs_) {
+      fs_->createHealthMap(health_map_.data(),
+                           static_cast<vamiga::isize>(health_map_.size()));
+    }
+  }
+
+  const float cell = 10.0f;
+  int cols = std::max(1, static_cast<int>(ImGui::GetContentRegionAvail().x / cell));
+  auto draw_list = ImGui::GetWindowDrawList();
+  ImVec2 start = ImGui::GetCursorScreenPos();
+
+  for (int i = 0; i < static_cast<int>(health_map_.size()); ++i) {
+    int row = i / cols;
+    int col = i % cols;
+    ImVec2 p0 = ImVec2(start.x + col * cell, start.y + row * cell);
+    ImVec2 p1 = ImVec2(p0.x + cell - 1, p0.y + cell - 1);
+    auto val = static_cast<HealthState>(health_map_[static_cast<size_t>(i)]);
+    draw_list->AddRectFilled(p0, p1, ImGui::GetColorU32(ColorForHealth(val)));
+  }
+  int rows = (static_cast<int>(health_map_.size()) + cols - 1) / cols;
+  ImGui::Dummy(ImVec2(0, rows * cell));
+
+  if (ImGui::BeginTable("HealthLegend", 2, ImGuiTableFlags_SizingFixedFit)) {
+    ImGui::TableSetupColumn("Color", ImGuiTableColumnFlags_WidthFixed, 24.0f);
+    ImGui::TableSetupColumn("State", ImGuiTableColumnFlags_WidthStretch);
+    struct Legend { std::string_view label; HealthState code; };
+    constexpr std::array legend = {
+        Legend{"Unused", HealthState::Unused},
+        Legend{"OK", HealthState::Ok},
+        Legend{"Error", HealthState::Error}};
+    for (const auto& entry : legend) {
+      ImGui::TableNextRow();
+      ImGui::TableSetColumnIndex(0);
+      ImGui::ColorButton("##col", ColorForHealth(entry.code),
+                         ImGuiColorEditFlags_NoTooltip | ImGuiColorEditFlags_NoDragDrop,
+                         ImVec2(18, 18));
+      ImGui::TableSetColumnIndex(1);
+      ImGui::Text("%s", entry.label.data());
     }
     ImGui::EndTable();
   }

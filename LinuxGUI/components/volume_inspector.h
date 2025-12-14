@@ -24,6 +24,8 @@ class VolumeInspector {
   void Refresh(vamiga::VAmiga& emu);
   void DrawInfo();
   void DrawUsage();
+  void DrawAllocation();
+  void DrawHealth(vamiga::VAmiga& emu);
   void DrawBlockView();
 
   bool open_ = false;
@@ -34,6 +36,8 @@ class VolumeInspector {
   std::unique_ptr<vamiga::MutableFileSystem> fs_;
   vamiga::FSInfo info_{};
   std::vector<uint8_t> usage_map_;
+  std::vector<uint8_t> alloc_map_;
+  std::vector<uint8_t> health_map_;
   std::array<int, static_cast<size_t>(vamiga::FSBlockType::DATA_FFS) + 1> type_counts_{};
 
   int selected_block_ = 0;
