@@ -513,6 +513,7 @@ void Application::DrawGUI() {
     ctx.screenshot_source = &screenshot_source_;
     ctx.port1_device = &port1_device_;
     ctx.port2_device = &port2_device_;
+    ctx.input_manager = input_manager_.get();
     ctx.on_load_kickstart = [this](auto p) { LoadKickstart(p); };
     ctx.on_eject_kickstart = [this]() { EjectKickstart(); };
     ctx.on_load_ext_rom = [this](auto p) { LoadExtendedRom(p); };

@@ -205,34 +205,29 @@ void SettingsWindow::DrawEnumCombo(std::string_view label, vamiga::VAmiga& emu) 
 void SettingsWindow::DrawInputs(vamiga::VAmiga& emulator, const SettingsContext& ctx) {
   ImGui::Text("Input Ports");
   ImGui::Separator();
-  if (ctx.port1_device && ctx.port2_device) {
-    static const int kMaxDevices = 8;
-    if (ImGui::BeginCombo("Port 1", InputManager::GetDeviceName(*ctx.port1_device).data())) {
-      for (int i : std::views::iota(0, kMaxDevices)) {
-        bool is_selected = (*ctx.port1_device == i);
-        if (ImGui::Selectable(InputManager::GetDeviceName(i).data(), is_selected)) {
-          *ctx.port1_device = i;
-          if (ctx.on_port_changed) ctx.on_port_changed();
-          if (ctx.on_save_config) ctx.on_save_config();
+  if (ctx.port1_device && ctx.port2_device && ctx.input_manager) {
+    auto draw_port_combo = [&](const char* label, int& current_device, int& other_port_device) {
+      if (ImGui::BeginCombo(label, ctx.input_manager->GetDeviceName(current_device).c_str())) {
+        for (int i : std::views::iota(0, InputManager::kMaxDevices)) {
+          bool is_selected = (current_device == i);
+          if (ImGui::Selectable(ctx.input_manager->GetDeviceName(i).c_str(), is_selected)) {
+            current_device = i;
+            if (current_device != 0 && current_device == other_port_device) {
+                other_port_device = 0; 
+            }
+            if (ctx.on_port_changed) ctx.on_port_changed();
+            if (ctx.on_save_config) ctx.on_save_config();
+          }
+          if (is_selected) ImGui::SetItemDefaultFocus();
         }
-        if (is_selected) ImGui::SetItemDefaultFocus();
+        ImGui::EndCombo();
       }
-      ImGui::EndCombo();
-    }
-    if (ImGui::BeginCombo("Port 2", InputManager::GetDeviceName(*ctx.port2_device).data())) {
-      for (int i : std::views::iota(0, kMaxDevices)) {
-        bool is_selected = (*ctx.port2_device == i);
-        if (ImGui::Selectable(InputManager::GetDeviceName(i).data(), is_selected)) {
-          *ctx.port2_device = i;
-          if (ctx.on_port_changed) ctx.on_port_changed();
-          if (ctx.on_save_config) ctx.on_save_config();
-        }
-        if (is_selected) ImGui::SetItemDefaultFocus();
-      }
-      ImGui::EndCombo();
-    }
+    };
+
+    draw_port_combo("Port 1", *ctx.port1_device, *ctx.port2_device);
+    draw_port_combo("Port 2", *ctx.port2_device, *ctx.port1_device);
   }
-  ImGui::Separator();
+  ImGui::Spacing();
   ImGui::Text("Autofire");
   bool af = static_cast<bool>(emulator.get(vamiga::Opt::JOY_AUTOFIRE));
   if (ImGui::Checkbox("Enable Autofire", &af)) {

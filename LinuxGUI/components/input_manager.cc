@@ -351,17 +351,23 @@ bool InputManager::IsReleaseKeyCombo(const SDL_KeyboardEvent& event) {
   if (ctrl && alt) return true;
   return false;
 }
-std::string_view InputManager::GetDeviceName(int device_id) {
+std::string InputManager::GetDeviceName(int device_id) const {
   switch (device_id) {
     case 0: return "None";
     case 1: return "Mouse";
     case 2: return "Keyset 1";
     case 3: return "Keyset 2";
-    case 4: return "Gamepad 1";
-    case 5: return "Gamepad 2";
-    case 6: return "Gamepad 3";
-    case 7: return "Gamepad 4";
-    default: return "Unknown";
+    default: {
+      int slot = device_id - 4;
+      if (slot >= 0 && slot < static_cast<int>(gamepad_ids_.size())) {
+        auto it = controllers_.find(gamepad_ids_[slot]);
+        if (it != controllers_.end()) {
+          const char* name = SDL_GameControllerName(it->second.get());
+          return name ? std::string(name) : std::format("Gamepad {}", slot + 1);
+        }
+      }
+      return std::format("Gamepad {} (Disconnected)", slot + 1);
+    }
   }
 }
 vamiga::KeyCode InputManager::SdlToAmigaKeyCode(SDL_Keycode key) {

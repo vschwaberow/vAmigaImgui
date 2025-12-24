@@ -18,7 +18,8 @@ class InputManager {
   void HandleWindowFocus(bool focused);
   void SetPortDevices(int port1_device, int port2_device);
   void SetViewportHovered(bool hovered);
-  static std::string_view GetDeviceName(int device_id);
+  std::string GetDeviceName(int device_id) const;
+  static constexpr int kMaxDevices = 8;
   bool pause_in_background_ = true;
   bool retain_mouse_by_click_ = true;
   bool retain_mouse_by_entering_ = false;
