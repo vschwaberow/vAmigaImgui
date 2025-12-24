@@ -232,6 +232,30 @@ void SettingsWindow::DrawInputs(vamiga::VAmiga& emulator, const SettingsContext&
       ImGui::EndCombo();
     }
   }
+  ImGui::Separator();
+  ImGui::Text("Autofire");
+  bool af = static_cast<bool>(emulator.get(vamiga::Opt::JOY_AUTOFIRE));
+  if (ImGui::Checkbox("Enable Autofire", &af)) {
+      emulator.set(vamiga::Opt::JOY_AUTOFIRE, af);
+  }
+  
+  ImGui::BeginDisabled(!af);
+  bool bursts = static_cast<bool>(emulator.get(vamiga::Opt::JOY_AUTOFIRE_BURSTS));
+  if (ImGui::Checkbox("Burst Mode", &bursts)) {
+      emulator.set(vamiga::Opt::JOY_AUTOFIRE_BURSTS, bursts);
+  }
+  
+  int bullets = static_cast<int>(emulator.get(vamiga::Opt::JOY_AUTOFIRE_BULLETS));
+  if (ImGui::SliderInt("Bullets per Burst", &bullets, 1, 10)) {
+      emulator.set(vamiga::Opt::JOY_AUTOFIRE_BULLETS, bullets);
+  }
+  
+  int delay = static_cast<int>(emulator.get(vamiga::Opt::JOY_AUTOFIRE_DELAY));
+  if (ImGui::SliderInt("Autofire Delay (Frames)", &delay, 1, 50)) {
+      emulator.set(vamiga::Opt::JOY_AUTOFIRE_DELAY, delay);
+  }
+  ImGui::EndDisabled();
+
   ImGui::Spacing();
   ImGui::Text("Input Settings");
   ImGui::Separator();
