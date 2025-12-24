@@ -503,6 +503,8 @@ void Application::DrawGUI() {
     ctx.snapshot_auto_delete = &snapshot_auto_delete_;
     ctx.screenshot_format = &screenshot_format_;
     ctx.screenshot_source = &screenshot_source_;
+    ctx.port1_device = &port1_device_;
+    ctx.port2_device = &port2_device_;
     ctx.on_load_kickstart = [this](auto p) { LoadKickstart(p); };
     ctx.on_eject_kickstart = [this]() { EjectKickstart(); };
     ctx.on_load_ext_rom = [this](auto p) { LoadExtendedRom(p); };
@@ -513,6 +515,7 @@ void Application::DrawGUI() {
     ctx.on_detach_hd = [this](int i) { DetachHardDrive(i); };
     ctx.on_save_config = [this]() { SaveConfig(); };
     ctx.on_toggle_fullscreen = [this]() { ToggleFullscreen(); };
+    ctx.on_port_changed = [this]() { input_manager_->SetPortDevices(port1_device_, port2_device_); };
     gui::SettingsWindow::Instance().Draw(&show_settings_, emulator_, ctx);
   }
   if (!video_as_background_) {

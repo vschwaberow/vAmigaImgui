@@ -1,4 +1,5 @@
 #include "components/settings_window.h"
+#include "input_manager.h"
 #include <array>
 #include <exception>
 #include <format>
@@ -202,6 +203,36 @@ void SettingsWindow::DrawEnumCombo(std::string_view label, vamiga::VAmiga& emu) 
   }
 }
 void SettingsWindow::DrawInputs(vamiga::VAmiga& emulator, const SettingsContext& ctx) {
+  ImGui::Text("Input Ports");
+  ImGui::Separator();
+  if (ctx.port1_device && ctx.port2_device) {
+    static const int kMaxDevices = 8;
+    if (ImGui::BeginCombo("Port 1", InputManager::GetDeviceName(*ctx.port1_device).data())) {
+      for (int i = 0; i < kMaxDevices; ++i) {
+        bool is_selected = (*ctx.port1_device == i);
+        if (ImGui::Selectable(InputManager::GetDeviceName(i).data(), is_selected)) {
+          *ctx.port1_device = i;
+          if (ctx.on_port_changed) ctx.on_port_changed();
+          if (ctx.on_save_config) ctx.on_save_config();
+        }
+        if (is_selected) ImGui::SetItemDefaultFocus();
+      }
+      ImGui::EndCombo();
+    }
+    if (ImGui::BeginCombo("Port 2", InputManager::GetDeviceName(*ctx.port2_device).data())) {
+      for (int i = 0; i < kMaxDevices; ++i) {
+        bool is_selected = (*ctx.port2_device == i);
+        if (ImGui::Selectable(InputManager::GetDeviceName(i).data(), is_selected)) {
+          *ctx.port2_device = i;
+          if (ctx.on_port_changed) ctx.on_port_changed();
+          if (ctx.on_save_config) ctx.on_save_config();
+        }
+        if (is_selected) ImGui::SetItemDefaultFocus();
+      }
+      ImGui::EndCombo();
+    }
+  }
+  ImGui::Spacing();
   ImGui::Text("Input Settings");
   ImGui::Separator();
   bool changed = false;
