@@ -96,6 +96,62 @@ void InputManager::HandleEvent(const SDL_Event& event) {
       break;
   }
 }
+
+InputManager::DeviceInfo InputManager::GetDeviceInfo(int device_id) const {
+  DeviceInfo info;
+  info.name = GetDeviceName(device_id);
+  
+  if (device_id == 0) return info;
+  if (device_id == 1) { info.is_connected = true; return info; }
+  if (device_id == 2 || device_id == 3) { info.is_connected = true; return info; }
+
+  int slot = device_id - 4;
+  if (slot >= 0 && slot < static_cast<int>(gamepad_ids_.size())) {
+    auto it = controllers_.find(gamepad_ids_[slot]);
+    if (it != controllers_.end()) {
+      SDL_GameController* c = it->second.get();
+      info.is_connected = true;
+      info.vendor_id = SDL_GameControllerGetVendor(c);
+      info.product_id = SDL_GameControllerGetProduct(c);
+      info.version = SDL_GameControllerGetProductVersion(c);
+      
+      char guid_str[33];
+      SDL_JoystickGetGUIDString(SDL_JoystickGetDeviceGUID(slot), guid_str, sizeof(guid_str));
+      info.guid = guid_str;
+    }
+  }
+  return info;
+}
+
+std::vector<std::string> InputManager::GetActiveActions(int device_id) const {
+    std::vector<std::string> actions;
+    if (device_id == 1) { // Mouse
+        if (mouse_buttons_[0]) actions.push_back("Left Button");
+        if (mouse_buttons_[1]) actions.push_back("Middle Button");
+        if (mouse_buttons_[2]) actions.push_back("Right Button");
+    } else if (device_id >= 4) { // Gamepads
+        int slot = device_id - 4;
+        if (slot >= 0 && slot < static_cast<int>(gamepad_ids_.size())) {
+            auto it = controllers_.find(gamepad_ids_[slot]);
+            if (it != controllers_.end()) {
+                SDL_GameController* c = it->second.get();
+                if (SDL_GameControllerGetButton(c, SDL_CONTROLLER_BUTTON_A)) actions.push_back("Fire (Button A)");
+                if (SDL_GameControllerGetButton(c, SDL_CONTROLLER_BUTTON_DPAD_UP)) actions.push_back("Pull Up");
+                if (SDL_GameControllerGetButton(c, SDL_CONTROLLER_BUTTON_DPAD_DOWN)) actions.push_back("Pull Down");
+                if (SDL_GameControllerGetButton(c, SDL_CONTROLLER_BUTTON_DPAD_LEFT)) actions.push_back("Pull Left");
+                if (SDL_GameControllerGetButton(c, SDL_CONTROLLER_BUTTON_DPAD_RIGHT)) actions.push_back("Pull Right");
+                
+                const int kThreshold = 16000;
+                if (SDL_GameControllerGetAxis(c, SDL_CONTROLLER_AXIS_LEFTY) < -kThreshold) actions.push_back("Axis Up");
+                if (SDL_GameControllerGetAxis(c, SDL_CONTROLLER_AXIS_LEFTY) > kThreshold) actions.push_back("Axis Down");
+                if (SDL_GameControllerGetAxis(c, SDL_CONTROLLER_AXIS_LEFTX) < -kThreshold) actions.push_back("Axis Left");
+                if (SDL_GameControllerGetAxis(c, SDL_CONTROLLER_AXIS_LEFTX) > kThreshold) actions.push_back("Axis Right");
+            }
+        }
+    }
+    return actions;
+}
+
 vamiga::MouseAPI* InputManager::GetActiveMouse() {
   if (port1_device_ == 1) return &emulator_.controlPort1.mouse;
   if (port2_device_ == 1) return &emulator_.controlPort2.mouse;
