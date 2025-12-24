@@ -619,7 +619,7 @@ void Application::DrawToolbar() {
   }
   ImGui::SetItemTooltip(std::format("Port 1: {}", port1_desc.label).c_str());
   ImGui::PopID();
-  DrawPortDeviceSelection(0, &port1_device_);
+  DrawPortDeviceSelection(0, port1_device_);
   ImGui::SameLine();
   ImGui::PushID("Port2Btn");
   const auto port2_desc = GetDeviceDescriptor(port2_device_);
@@ -628,7 +628,7 @@ void Application::DrawToolbar() {
   }
   ImGui::SetItemTooltip(std::format("Port 2: {}", port2_desc.label).c_str());
   ImGui::PopID();
-  DrawPortDeviceSelection(1, &port2_device_);
+  DrawPortDeviceSelection(1, port2_device_);
   ImGui::EndGroup();
   ImGui::SameLine(0, 20.0f);
   ImGui::BeginGroup();
@@ -654,14 +654,14 @@ void Application::DrawToolbar() {
 std::string_view Application::GetDeviceIcon(int device_id) {
     return GetDeviceDescriptor(device_id).icon;
 }
-void Application::DrawPortDeviceSelection(int port_idx, int* device_id) {
+void Application::DrawPortDeviceSelection(int port_idx, int& device_id) {
     std::string popup_id = std::format("Port{}Menu", port_idx + 1);
     if (ImGui::BeginPopup(popup_id.c_str())) {
         for (int i : std::views::iota(0, static_cast<int>(kDeviceDescriptors.size()))) {
             const auto desc = GetDeviceDescriptor(i);
             std::string label = std::format("{} {}", desc.icon, desc.label);
-            if (ImGui::Selectable(label.c_str(), *device_id == i)) {
-                *device_id = i;
+            if (ImGui::Selectable(label.c_str(), device_id == i)) {
+                device_id = i;
                 input_manager_->SetPortDevices(port1_device_, port2_device_);
             }
         }

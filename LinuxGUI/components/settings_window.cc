@@ -208,7 +208,7 @@ void SettingsWindow::DrawInputs(vamiga::VAmiga& emulator, const SettingsContext&
   if (ctx.port1_device && ctx.port2_device) {
     static const int kMaxDevices = 8;
     if (ImGui::BeginCombo("Port 1", InputManager::GetDeviceName(*ctx.port1_device).data())) {
-      for (int i = 0; i < kMaxDevices; ++i) {
+      for (int i : std::views::iota(0, kMaxDevices)) {
         bool is_selected = (*ctx.port1_device == i);
         if (ImGui::Selectable(InputManager::GetDeviceName(i).data(), is_selected)) {
           *ctx.port1_device = i;
@@ -220,7 +220,7 @@ void SettingsWindow::DrawInputs(vamiga::VAmiga& emulator, const SettingsContext&
       ImGui::EndCombo();
     }
     if (ImGui::BeginCombo("Port 2", InputManager::GetDeviceName(*ctx.port2_device).data())) {
-      for (int i = 0; i < kMaxDevices; ++i) {
+      for (int i : std::views::iota(0, kMaxDevices)) {
         bool is_selected = (*ctx.port2_device == i);
         if (ImGui::Selectable(InputManager::GetDeviceName(i).data(), is_selected)) {
           *ctx.port2_device = i;
