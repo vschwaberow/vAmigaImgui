@@ -224,6 +224,10 @@ void Application::LoadConfig() {
   show_keyboard_ = config_->GetBool(gui::ConfigKeys::kUiShowKeyboard, false);
   port1_device_ = config_->GetInt(gui::ConfigKeys::kInputPort1, 1);
   port2_device_ = config_->GetInt(gui::ConfigKeys::kInputPort2, 2);
+  emulator_.set(vamiga::Opt::JOY_AUTOFIRE, config_->GetBool(gui::ConfigKeys::kInputAutofire, false));
+  emulator_.set(vamiga::Opt::JOY_AUTOFIRE_BURSTS, config_->GetBool(gui::ConfigKeys::kInputAutofireBursts, false));
+  emulator_.set(vamiga::Opt::JOY_AUTOFIRE_BULLETS, config_->GetInt(gui::ConfigKeys::kInputAutofireBullets, 1));
+  emulator_.set(vamiga::Opt::JOY_AUTOFIRE_DELAY, config_->GetInt(gui::ConfigKeys::kInputAutofireDelay, 10));
   snapshot_auto_delete_ = config_->GetBool(gui::ConfigKeys::kSnapAutoDelete, gui::Defaults::kSnapshotAutoDelete);
   screenshot_format_ = config_->GetInt(gui::ConfigKeys::kScrnFormat, gui::Defaults::kScreenshotFormat);
   screenshot_source_ = config_->GetInt(gui::ConfigKeys::kScrnSource, gui::Defaults::kScreenshotSource);
@@ -251,6 +255,10 @@ void Application::SaveConfig() {
   config_->SetBool(gui::ConfigKeys::kUiShowKeyboard, show_keyboard_);
   config_->SetInt(gui::ConfigKeys::kInputPort1, port1_device_);
   config_->SetInt(gui::ConfigKeys::kInputPort2, port2_device_);
+  config_->SetBool(gui::ConfigKeys::kInputAutofire, static_cast<bool>(emulator_.get(vamiga::Opt::JOY_AUTOFIRE)));
+  config_->SetBool(gui::ConfigKeys::kInputAutofireBursts, static_cast<bool>(emulator_.get(vamiga::Opt::JOY_AUTOFIRE_BURSTS)));
+  config_->SetInt(gui::ConfigKeys::kInputAutofireBullets, static_cast<int>(emulator_.get(vamiga::Opt::JOY_AUTOFIRE_BULLETS)));
+  config_->SetInt(gui::ConfigKeys::kInputAutofireDelay, static_cast<int>(emulator_.get(vamiga::Opt::JOY_AUTOFIRE_DELAY)));
   config_->SetBool(gui::ConfigKeys::kSnapAutoDelete, snapshot_auto_delete_);
   config_->SetInt(gui::ConfigKeys::kScrnFormat, screenshot_format_);
   config_->SetInt(gui::ConfigKeys::kScrnSource, screenshot_source_);

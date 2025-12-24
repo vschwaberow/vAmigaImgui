@@ -44,6 +44,10 @@ ConfigProvider::ConfigProvider(vamiga::DefaultsAPI& defaults_api)
   defaults_.setFallback(std::string(ConfigKeys::kUiShowKeyboard), "0");
   defaults_.setFallback(std::string(ConfigKeys::kInputPort1), "1");
   defaults_.setFallback(std::string(ConfigKeys::kInputPort2), "2");
+  defaults_.setFallback(std::string(ConfigKeys::kInputAutofire), "0");
+  defaults_.setFallback(std::string(ConfigKeys::kInputAutofireBursts), "0");
+  defaults_.setFallback(std::string(ConfigKeys::kInputAutofireBullets), "1");
+  defaults_.setFallback(std::string(ConfigKeys::kInputAutofireDelay), "10");
    
   defaults_.setFallback(std::string(ConfigKeys::kHwCpu), std::to_string(static_cast<int>(vamiga::CPURev::CPU_68000)));
   defaults_.setFallback(std::string(ConfigKeys::kHwAgnus), std::to_string(static_cast<int>(vamiga::AgnusRevision::OCS)));

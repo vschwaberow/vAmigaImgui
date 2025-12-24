@@ -59,6 +59,8 @@ TEST(ConfigProviderTest, SaveAndLoadRoundTripsValues) {
     gui::ConfigProvider provider(*api);
     provider.SetString(gui::ConfigKeys::kKickstartPath, "/tmp/kick.rom");
     provider.SetInt(gui::ConfigKeys::kAudioVolume, 77);
+    provider.SetBool(gui::ConfigKeys::kInputAutofire, true);
+    provider.SetInt(gui::ConfigKeys::kInputAutofireDelay, 15);
     provider.Save();
   }
 
@@ -69,6 +71,8 @@ TEST(ConfigProviderTest, SaveAndLoadRoundTripsValues) {
     provider.Load();
     EXPECT_EQ(provider.GetString(gui::ConfigKeys::kKickstartPath), "/tmp/kick.rom");
     EXPECT_EQ(provider.GetInt(gui::ConfigKeys::kAudioVolume, 0), 77);
+    EXPECT_TRUE(provider.GetBool(gui::ConfigKeys::kInputAutofire, false));
+    EXPECT_EQ(provider.GetInt(gui::ConfigKeys::kInputAutofireDelay, 0), 15);
   }
 
   std::filesystem::remove_all(temp_home);
