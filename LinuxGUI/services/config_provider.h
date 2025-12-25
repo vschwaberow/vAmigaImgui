@@ -27,6 +27,10 @@ struct ConfigKeys {
   static constexpr std::string_view kUiShowKeyboard  = "UI.ShowKeyboard";
   static constexpr std::string_view kInputPort1 = "Input.Port1Device";
   static constexpr std::string_view kInputPort2 = "Input.Port2Device";
+  static constexpr std::string_view kInputAutofire = "Input.Autofire";
+  static constexpr std::string_view kInputAutofireBursts = "Input.AutofireBursts";
+  static constexpr std::string_view kInputAutofireBullets = "Input.AutofireBullets";
+  static constexpr std::string_view kInputAutofireDelay = "Input.AutofireDelay";
    
   static constexpr std::string_view kHwCpu       = "Hardware.CPU";
   static constexpr std::string_view kHwAgnus     = "Hardware.Agnus";

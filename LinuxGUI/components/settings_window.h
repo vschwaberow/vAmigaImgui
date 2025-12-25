@@ -13,6 +13,7 @@
 namespace vamiga {
 class VAmiga;
 }
+class InputManager;
 namespace gui {
 struct SettingsContext {
   std::string* kickstart_path;
@@ -30,6 +31,9 @@ struct SettingsContext {
   bool* snapshot_auto_delete;
   int* screenshot_format;
   int* screenshot_source;
+  int* port1_device;
+  int* port2_device;
+  ::InputManager* input_manager;
   std::function<void(const std::filesystem::path&)> on_load_kickstart;
   std::function<void()> on_eject_kickstart;
   std::function<void(const std::filesystem::path&)> on_load_ext_rom;
@@ -40,6 +44,7 @@ struct SettingsContext {
   std::function<void(int)> on_detach_hd;
   std::function<void()> on_save_config;
   std::function<void()> on_toggle_fullscreen;
+  std::function<void()> on_port_changed;
 };
 class SettingsWindow {
  public:

@@ -1,4 +1,5 @@
 #include "components/settings_window.h"
+#include "input_manager.h"
 #include <array>
 #include <exception>
 #include <format>
@@ -202,6 +203,96 @@ void SettingsWindow::DrawEnumCombo(std::string_view label, vamiga::VAmiga& emu) 
   }
 }
 void SettingsWindow::DrawInputs(vamiga::VAmiga& emulator, const SettingsContext& ctx) {
+  ImGui::Text("Input Ports");
+  ImGui::Separator();
+  if (ctx.port1_device && ctx.port2_device && ctx.input_manager) {
+    auto draw_port_combo = [&](const char* label, int& current_device, int& other_port_device) {
+      if (ImGui::BeginCombo(label, ctx.input_manager->GetDeviceName(current_device).c_str())) {
+        for (int i : std::views::iota(0, InputManager::kMaxDevices)) {
+          bool is_selected = (current_device == i);
+          if (ImGui::Selectable(ctx.input_manager->GetDeviceName(i).c_str(), is_selected)) {
+            current_device = i;
+            if (current_device != 0 && current_device == other_port_device) {
+                other_port_device = 0; 
+            }
+            if (ctx.on_port_changed) ctx.on_port_changed();
+            if (ctx.on_save_config) ctx.on_save_config();
+          }
+          if (is_selected) ImGui::SetItemDefaultFocus();
+        }
+        ImGui::EndCombo();
+      }
+    };
+
+    draw_port_combo("Port 1", *ctx.port1_device, *ctx.port2_device);
+    draw_port_combo("Port 2", *ctx.port2_device, *ctx.port1_device);
+
+    ImGui::Spacing();
+    ImGui::Text("Device Info");
+    ImGui::Separator();
+    
+    static int selected_device_idx = 1; 
+    if (ImGui::BeginCombo("View Device", ctx.input_manager->GetDeviceName(selected_device_idx).c_str())) {
+        for (int i : std::views::iota(0, InputManager::kMaxDevices)) {
+            if (ImGui::Selectable(ctx.input_manager->GetDeviceName(i).c_str(), selected_device_idx == i)) {
+                selected_device_idx = i;
+            }
+        }
+        ImGui::EndCombo();
+    }
+
+    auto info = ctx.input_manager->GetDeviceInfo(selected_device_idx);
+    if (info.is_connected) {
+        ImGui::BeginChild("DeviceInfoBox", ImVec2(0, 120), true);
+        ImGui::Text("Name: %s", info.name.c_str());
+        if (selected_device_idx >= 4) {
+            ImGui::Text("GUID: %s", info.guid.c_str());
+            ImGui::Text("Vendor ID:  0x%04X", info.vendor_id);
+            ImGui::Text("Product ID: 0x%04X", info.product_id);
+            ImGui::Text("Version:    %d", info.version);
+        } else {
+            ImGui::TextDisabled("System device (No hardware IDs available)");
+        }
+        
+        auto active = ctx.input_manager->GetActiveActions(selected_device_idx);
+        if (!active.empty()) {
+            ImGui::Separator();
+            ImGui::Text("Active:");
+            for (const auto& action : active) {
+                ImGui::SameLine();
+                ImGui::TextColored(ImVec4(0.2f, 0.8f, 0.2f, 1.0f), "[%s]", action.c_str());
+            }
+        }
+        ImGui::EndChild();
+    } else {
+        ImGui::TextDisabled("Device not connected.");
+    }
+  }
+  ImGui::Spacing();
+  ImGui::Text("Autofire");
+  bool af = static_cast<bool>(emulator.get(vamiga::Opt::JOY_AUTOFIRE));
+  if (ImGui::Checkbox("Enable Autofire", &af)) {
+      emulator.set(vamiga::Opt::JOY_AUTOFIRE, af);
+  }
+  
+  ImGui::BeginDisabled(!af);
+  bool bursts = static_cast<bool>(emulator.get(vamiga::Opt::JOY_AUTOFIRE_BURSTS));
+  if (ImGui::Checkbox("Burst Mode", &bursts)) {
+      emulator.set(vamiga::Opt::JOY_AUTOFIRE_BURSTS, bursts);
+  }
+  
+  int bullets = static_cast<int>(emulator.get(vamiga::Opt::JOY_AUTOFIRE_BULLETS));
+  if (ImGui::SliderInt("Bullets per Burst", &bullets, 1, 10)) {
+      emulator.set(vamiga::Opt::JOY_AUTOFIRE_BULLETS, bullets);
+  }
+  
+  int delay = static_cast<int>(emulator.get(vamiga::Opt::JOY_AUTOFIRE_DELAY));
+  if (ImGui::SliderInt("Autofire Delay (Frames)", &delay, 1, 50)) {
+      emulator.set(vamiga::Opt::JOY_AUTOFIRE_DELAY, delay);
+  }
+  ImGui::EndDisabled();
+
+  ImGui::Spacing();
   ImGui::Text("Input Settings");
   ImGui::Separator();
   bool changed = false;

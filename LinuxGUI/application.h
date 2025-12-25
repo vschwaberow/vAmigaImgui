@@ -57,7 +57,7 @@ class Application {
   void DrawHardDriveMenu(int drive_index);
   void ManageSnapshots();
   std::string_view GetDeviceIcon(int device_id);
-  void DrawPortDeviceSelection(int port_idx, int* device_id);
+  void DrawPortDeviceSelection(int port_idx, int& device_id);
   SDLWindowPtr window_;
   SDLGLContextPtr gl_context_;
   unsigned int video_texture_ = 0;
