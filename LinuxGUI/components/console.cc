@@ -133,7 +133,7 @@ int Console::TextEditCallback(void* data_void) {
 
       if (prev_history_pos != history_pos_) {
         std::string_view history_str =
-            (history_pos_ >= 0) ? history_[history_pos_] : "";
+            (history_pos_ >= 0) ? std::string_view(history_[history_pos_]) : "";
         data->DeleteChars(0, data->BufTextLen);
         data->InsertChars(0, history_str.data());
       }

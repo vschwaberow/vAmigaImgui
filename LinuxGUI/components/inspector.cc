@@ -1,4 +1,5 @@
 #include "inspector.h"
+#include "../compat.h"
 #include "logic_analyzer.h"
 #include <algorithm>
 #include <charconv>

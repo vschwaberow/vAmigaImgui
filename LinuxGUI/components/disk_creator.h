@@ -3,8 +3,12 @@
 
 #include <utility>
 #include "VAmiga.h"
-#undef unreachable
+#include <vector>
+#include "../compat.h"
+
+#ifndef unreachable
 #define unreachable std::unreachable()
+#endif
 #include "imgui.h"
 #include <string>
 

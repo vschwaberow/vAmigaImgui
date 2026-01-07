@@ -16,7 +16,11 @@ static constexpr int kAudioSamples = 1024;
 static constexpr int kFloppyDriveCount = 4;
 static constexpr int kHardDriveCount = 4;
 
+#ifdef __APPLE__
+static constexpr std::string_view kGlslVersion = "#version 150";
+#else
 static constexpr std::string_view kGlslVersion = "#version 130";
+#endif
 
 namespace Defaults {
     static constexpr std::string_view kConfigDir = ".config";

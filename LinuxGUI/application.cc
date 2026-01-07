@@ -1,10 +1,11 @@
 #include "application.h"
+#include "compat.h"
 #include <SDL_opengl.h>
 #include <array>
 #include <format>
 #include <print>
 #include <ranges>
-#include "constants.h"
+#include "gui_constants.h"
 #include "Ports/AudioPort.h"
 #include "backends/imgui_impl_opengl3.h"
 #include "backends/imgui_impl_sdl2.h"
@@ -71,10 +72,17 @@ bool Application::InitSDL() {
     std::println(std::cerr, "SDL_Init Error: {}", SDL_GetError());
     return false;
   }
+#ifdef __APPLE__
+  SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, SDL_GL_CONTEXT_FORWARD_COMPATIBLE_FLAG);
+  SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
+  SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
+  SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 2);
+#else
   SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, 0);
   SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
   SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
   SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
+#endif
   SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
   SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
   SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 8);
@@ -618,7 +626,7 @@ void Application::DrawToolbar() {
   if (ImGui::Button(port1_desc.icon.data())) {
     ImGui::OpenPopup("Port1Menu");
   }
-  ImGui::SetItemTooltip(std::format("Port 1: {}", port1_desc.label).c_str());
+  ImGui::SetItemTooltip("%s", std::format("Port 1: {}", port1_desc.label).c_str());
   ImGui::PopID();
   DrawPortDeviceSelection(0, port1_device_);
   ImGui::SameLine();
@@ -627,7 +635,7 @@ void Application::DrawToolbar() {
   if (ImGui::Button(port2_desc.icon.data())) {
     ImGui::OpenPopup("Port2Menu");
   }
-  ImGui::SetItemTooltip(std::format("Port 2: {}", port2_desc.label).c_str());
+  ImGui::SetItemTooltip("%s", std::format("Port 2: {}", port2_desc.label).c_str());
   ImGui::PopID();
   DrawPortDeviceSelection(1, port2_device_);
   ImGui::EndGroup();

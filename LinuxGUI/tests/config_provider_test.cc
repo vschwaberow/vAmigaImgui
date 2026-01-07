@@ -5,7 +5,7 @@
 #include <string>
 
 #include "services/config_provider.h"
-#include "constants.h"
+#include "gui_constants.h"
 #include "Infrastructure/Defaults.h"
 
 TEST(ConfigProviderTest, UsesFallbacksWhenUnset) {

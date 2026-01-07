@@ -4,7 +4,7 @@
 #include <format>
 #include <iostream>
 #include <ranges>
-#include "constants.h"
+#include "gui_constants.h"
 #include "Components/Agnus/AgnusTypes.h"
 #include "Components/CPU/CPUTypes.h"
 #include "Components/Denise/DeniseTypes.h"

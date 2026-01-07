@@ -5,6 +5,8 @@ project(vAmigaImGui)
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED False)
 
+add_compile_options(-Wno-error)
+
 find_package(SDL2 REQUIRED)
 include_directories(${SDL2_INCLUDE_DIRS})
 
@@ -79,11 +81,18 @@ target_sources(vAmigaLinux PRIVATE
 )
 
 target_compile_definitions(vAmigaLinux PRIVATE
-    IMGUI_IMPL_OPENGL_LOADER_GL3W
     USE_STD_FILESYSTEM
 )
 
-target_link_libraries(vAmigaLinux PRIVATE GL dl)
+if(NOT APPLE)
+    target_compile_definitions(vAmigaLinux PRIVATE IMGUI_IMPL_OPENGL_LOADER_GL3W)
+endif()
+
+if(APPLE)
+    target_link_libraries(vAmigaLinux PRIVATE "-framework OpenGL -framework Cocoa -framework IOKit -framework CoreVideo")
+else()
+    target_link_libraries(vAmigaLinux PRIVATE GL dl)
+endif()
 
 add_executable(vAmigaTests
     tests/smoke_test.cc

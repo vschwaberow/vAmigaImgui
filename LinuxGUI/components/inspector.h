@@ -11,7 +11,9 @@
 #include <vector>
 #include "VAmiga.h"
 #undef unreachable
+#ifndef unreachable
 #define unreachable std::unreachable()
+#endif
 #include "imgui.h"
 #include "resources/IconsFontAwesome6.h"
 namespace gui {
