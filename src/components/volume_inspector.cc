@@ -1,7 +1,5 @@
 #include "volume_inspector.h"
-
-#include <algorithm>
-#include <array>
+#include "../compat.h"
 #include <format>
 #include <ranges>
 #include <string_view>

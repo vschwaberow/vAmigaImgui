@@ -1,9 +1,11 @@
 cmake_minimum_required(VERSION 3.16)
 
-project(vAmigaImGui)
+project(vAmigaImgui)
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED False)
+
+add_compile_options(-Wno-error)
 
 find_package(SDL2 REQUIRED)
 include_directories(${SDL2_INCLUDE_DIRS})
@@ -37,25 +39,26 @@ FetchContent_MakeAvailable(googletest)
 
 enable_testing()
 
-add_executable(vAmigaLinux
+add_executable(vAmigaImgui
     main.cc
     application.cc
 )
+set_target_properties(vAmigaImgui PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
 
-target_link_libraries(vAmigaLinux PRIVATE
+target_link_libraries(vAmigaImgui PRIVATE
     VACore
     ${SDL2_LIBRARIES}
     ImGuiFileDialog
 )
 
-target_include_directories(vAmigaLinux PRIVATE
+target_include_directories(vAmigaImgui PRIVATE
     ${imgui_SOURCE_DIR}
     ${imgui_SOURCE_DIR}/backends
     ${ImGuiFileDialog_SOURCE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}
 )
 
-target_sources(vAmigaLinux PRIVATE
+target_sources(vAmigaImgui PRIVATE
     components/console.cc
     components/dashboard.cc
     components/disk_creator.cc
@@ -78,18 +81,26 @@ target_sources(vAmigaLinux PRIVATE
     ${imgui_SOURCE_DIR}/backends/imgui_impl_opengl3.cpp
 )
 
-target_compile_definitions(vAmigaLinux PRIVATE
-    IMGUI_IMPL_OPENGL_LOADER_GL3W
+target_compile_definitions(vAmigaImgui PRIVATE
     USE_STD_FILESYSTEM
 )
 
-target_link_libraries(vAmigaLinux PRIVATE GL dl)
+if(NOT APPLE)
+    target_compile_definitions(vAmigaImgui PRIVATE IMGUI_IMPL_OPENGL_LOADER_GL3W)
+endif()
+
+if(APPLE)
+    target_link_libraries(vAmigaImgui PRIVATE "-framework OpenGL -framework Cocoa -framework IOKit -framework CoreVideo")
+else()
+    target_link_libraries(vAmigaImgui PRIVATE GL dl)
+endif()
 
 add_executable(vAmigaTests
     tests/smoke_test.cc
     tests/config_provider_test.cc
     services/config_provider.cc
 )
+set_target_properties(vAmigaTests PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
 target_link_libraries(vAmigaTests PRIVATE
     gtest_main
     VACore

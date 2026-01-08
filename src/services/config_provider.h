@@ -6,7 +6,9 @@
 #include <string_view>
 #include "VAmiga.h"
 #undef unreachable
+#ifndef unreachable
 #define unreachable std::unreachable()
+#endif
 namespace gui {
 struct ConfigKeys {
   static constexpr std::string_view kKickstartPath = "KickstartPath";

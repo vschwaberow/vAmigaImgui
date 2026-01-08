@@ -6,7 +6,7 @@
 #include <ranges>
 #include <span>
 #include "VAmiga.h"
-#include "constants.h"
+#include "gui_constants.h"
 #include "Infrastructure/Option.h"
 #include "components/file_picker.h"
 #include "imgui.h"
@@ -189,7 +189,7 @@ void SettingsWindow::DrawEnumCombo(std::string_view label, vamiga::VAmiga& emu) 
 
   const auto preview_it = std::ranges::find_if(
       items, [current_val](const auto& item) { return item.second == current_val; });
-  std::string_view preview = (preview_it != items.end()) ? preview_it->first : "Unknown";
+  std::string_view preview = (preview_it != items.end()) ? std::string_view(preview_it->first) : "Unknown";
 
   if (ImGui::BeginCombo(label.data(), preview.data())) {
     for (const auto& [name, value] : items) {
