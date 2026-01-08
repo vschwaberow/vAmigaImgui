@@ -22,7 +22,7 @@ Requirements: `cmake`, `gcc` (or `clang`), `libsdl2-dev`.
 
 ```bash
 # 1. Clone the repository
-git clone https://github.com/dirkwhoffmann/vAmiga.git
+git clone https://github.com/vschwaberow/vAmigaImgui.git
 cd vAmiga
 
 # 2. Fetch submodules
