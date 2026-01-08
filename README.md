@@ -31,5 +31,5 @@ cmake -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j$(nproc)
 
 # 4. Run
-./build/LinuxGUI/vAmigaLinux
+./build/bin/vAmigaImgui
 ```
