@@ -10,34 +10,72 @@ add_compile_options(-Wno-error)
 find_package(SDL2 REQUIRED)
 include_directories(${SDL2_INCLUDE_DIRS})
 
-include(FetchContent)
-FetchContent_Declare(
-    imgui
-    GIT_REPOSITORY https://github.com/ocornut/imgui
-    GIT_TAG        docking
-)
-FetchContent_MakeAvailable(imgui)
+option(VAMIGAIMGUUI_FETCHCONTENT "Allow downloading dependencies via FetchContent" ON)
+option(ENABLE_TESTS "Build tests" ON)
 
-FetchContent_Declare(
-    ImGuiFileDialog
-    GIT_REPOSITORY https://github.com/aiekick/ImGuiFileDialog
-    GIT_TAG        v0.6.8
-)
-FetchContent_MakeAvailable(ImGuiFileDialog)
+set(IMGUI_DIR "" CACHE PATH "Path to ImGui source (root contains imgui.h)")
+
+include(FetchContent)
+if(IMGUI_DIR STREQUAL "")
+    if(NOT VAMIGAIMGUUI_FETCHCONTENT)
+        message(FATAL_ERROR "ImGui not found. Set -DIMGUI_DIR=/path/to/imgui or enable FetchContent.")
+    endif()
+    FetchContent_Declare(
+        imgui
+        GIT_REPOSITORY https://github.com/ocornut/imgui
+        GIT_TAG        docking
+    )
+    FetchContent_MakeAvailable(imgui)
+else()
+    set(imgui_SOURCE_DIR "${IMGUI_DIR}")
+endif()
+if(NOT EXISTS "${imgui_SOURCE_DIR}/imgui.h")
+    message(FATAL_ERROR "ImGui not found at ${imgui_SOURCE_DIR}. Set -DIMGUI_DIR=/path/to/imgui.")
+endif()
+
+set(IMGUIFILEDIALOG_DIR "" CACHE PATH "Path to ImGuiFileDialog source")
+if(IMGUIFILEDIALOG_DIR STREQUAL "")
+    if(NOT VAMIGAIMGUUI_FETCHCONTENT)
+        message(FATAL_ERROR "ImGuiFileDialog not found. Set -DIMGUIFILEDIALOG_DIR=/path/to/ImGuiFileDialog or enable FetchContent.")
+    endif()
+    FetchContent_Declare(
+        ImGuiFileDialog
+        GIT_REPOSITORY https://github.com/aiekick/ImGuiFileDialog
+        GIT_TAG        v0.6.8
+    )
+    FetchContent_MakeAvailable(ImGuiFileDialog)
+else()
+    if(NOT EXISTS "${IMGUIFILEDIALOG_DIR}/CMakeLists.txt")
+        message(FATAL_ERROR "ImGuiFileDialog not found at ${IMGUIFILEDIALOG_DIR}. Set -DIMGUIFILEDIALOG_DIR=/path/to/ImGuiFileDialog.")
+    endif()
+    add_subdirectory("${IMGUIFILEDIALOG_DIR}" ImGuiFileDialog)
+endif()
 target_include_directories(ImGuiFileDialog PUBLIC ${imgui_SOURCE_DIR})
 if(CMAKE_CXX_COMPILER_ID MATCHES "Clang" OR CMAKE_CXX_COMPILER_ID MATCHES "GNU")
     target_compile_options(ImGuiFileDialog PRIVATE -Wno-deprecated-enum-enum-conversion)
 endif()
 
-FetchContent_Declare(
-    googletest
-    GIT_REPOSITORY https://github.com/google/googletest.git
-    GIT_TAG        v1.14.0
-)
-set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
-FetchContent_MakeAvailable(googletest)
-
-enable_testing()
+if(ENABLE_TESTS)
+    set(GTEST_DIR "" CACHE PATH "Path to googletest source")
+    if(GTEST_DIR STREQUAL "")
+        if(NOT VAMIGAIMGUUI_FETCHCONTENT)
+            message(FATAL_ERROR "googletest not found. Set -DGTEST_DIR=/path/to/googletest or enable FetchContent, or disable tests with -DENABLE_TESTS=OFF.")
+        endif()
+        FetchContent_Declare(
+            googletest
+            GIT_REPOSITORY https://github.com/google/googletest.git
+            GIT_TAG        v1.14.0
+        )
+        set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+        FetchContent_MakeAvailable(googletest)
+    else()
+        if(NOT EXISTS "${GTEST_DIR}/CMakeLists.txt")
+            message(FATAL_ERROR "googletest not found at ${GTEST_DIR}. Set -DGTEST_DIR=/path/to/googletest.")
+        endif()
+        add_subdirectory("${GTEST_DIR}" googletest)
+    endif()
+    enable_testing()
+endif()
 
 add_executable(vAmigaImgui
     main.cc
@@ -95,17 +133,19 @@ else()
     target_link_libraries(vAmigaImgui PRIVATE GL dl)
 endif()
 
-add_executable(vAmigaTests
-    tests/smoke_test.cc
-    tests/config_provider_test.cc
-    services/config_provider.cc
-)
-set_target_properties(vAmigaTests PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
-target_link_libraries(vAmigaTests PRIVATE
-    gtest_main
-    VACore
-)
-target_include_directories(vAmigaTests PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}
-)
-add_test(NAME vAmigaTests COMMAND vAmigaTests)
+if(ENABLE_TESTS)
+    add_executable(vAmigaTests
+        tests/smoke_test.cc
+        tests/config_provider_test.cc
+        services/config_provider.cc
+    )
+    set_target_properties(vAmigaTests PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
+    target_link_libraries(vAmigaTests PRIVATE
+        gtest_main
+        VACore
+    )
+    target_include_directories(vAmigaTests PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}
+    )
+    add_test(NAME vAmigaTests COMMAND vAmigaTests)
+endif()

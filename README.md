@@ -25,12 +25,29 @@ Requirements: `cmake`, `gcc` (or `clang`), `libsdl2-dev`.
 git clone https://github.com/dirkwhoffmann/vAmiga.git
 cd vAmiga
 
-# 2. Configure
+# 2. Fetch submodules
+git submodule update --init --recursive
+
+# 3. Configure
 cmake -B build -DCMAKE_BUILD_TYPE=Release
 
-# 3. Build
+# 4. Build
 cmake --build build -j$(nproc)
 
-# 4. Run
+# 5. Run
 ./build/bin/vAmigaImgui
 ```
+
+#### Offline or pre-downloaded dependencies
+
+If you cannot use network access during configuration, point CMake at local copies of the dependencies:
+
+```bash
+cmake -B build -DCMAKE_BUILD_TYPE=Release \
+  -DVAMIGA_CORE_DIR=/path/to/vAmiga/Core \
+  -DIMGUI_DIR=/path/to/imgui \
+  -DIMGUIFILEDIALOG_DIR=/path/to/ImGuiFileDialog \
+  -DENABLE_TESTS=OFF
+```
+
+If you want tests on, also add `-DGTEST_DIR=/path/to/googletest`.
