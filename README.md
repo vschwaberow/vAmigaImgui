@@ -10,6 +10,7 @@ This repository includes an experimental **Linux port** of vAmiga, utilizing **S
 While the core emulation remains identical to the macOS version, the frontend has been rewritten to support Linux desktop environments. Key features of this port include:
 
 -   **Native Linux Support:** Builds and runs on modern Linux distributions (Ubuntu, Fedora, Arch, etc.).
+-   **MacOS Support:** Builds and run on MacOS
 -   **ImGui Interface:** A completely new, lightweight, and functional UI for configuring the emulator, managing media, and inspecting the system state.
 -   **Hardware Acceleration:** Uses OpenGL 3.0+ for rendering.
 -   **Input Support:** Robust keyboard and mouse integration, including mouse capture/release modes and full support for **physical gamepads** (via SDL2).
