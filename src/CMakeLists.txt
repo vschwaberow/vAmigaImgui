@@ -141,6 +141,7 @@ if(ENABLE_TESTS)
         tests/hard_disk_creator_test.cc
         services/config_provider.cc
         components/hard_disk_creator.cc
+        components/file_picker.cc
         ${imgui_SOURCE_DIR}/imgui.cpp
         ${imgui_SOURCE_DIR}/imgui_demo.cpp
         ${imgui_SOURCE_DIR}/imgui_draw.cpp
@@ -151,10 +152,12 @@ if(ENABLE_TESTS)
     target_link_libraries(vAmigaTests PRIVATE
         gtest_main
         VACore
+        ImGuiFileDialog
     )
     target_include_directories(vAmigaTests PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}
         ${imgui_SOURCE_DIR}
+        ${ImGuiFileDialog_SOURCE_DIR}
     )
     add_test(NAME vAmigaTests COMMAND vAmigaTests)
 endif()
