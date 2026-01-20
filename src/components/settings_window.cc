@@ -9,6 +9,7 @@
 #include "gui_constants.h"
 #include "Infrastructure/Option.h"
 #include "components/file_picker.h"
+#include "components/hard_disk_creator.h"
 #include "imgui.h"
 namespace ImGui {
 inline bool InputText(const char* label, std::string* str,
@@ -116,6 +117,8 @@ void SettingsWindow::Draw(bool* p_open, vamiga::VAmiga& emulator,
     ImGui::EndPopup();
   }
   ImGui::End();
+
+  gui::HardDiskCreator::Instance().Draw();
 }
 void SettingsWindow::DrawSidebar() {
   ImGui::Spacing();
@@ -550,6 +553,13 @@ void SettingsWindow::DrawPeripherals(vamiga::VAmiga& emulator, const SettingsCon
     }
     if (ImGui::BeginTabItem("Hard Drives")) {
         ImGui::Spacing();
+        if (ImGui::Button(ICON_FA_PLUS " Create New Hard Disk")) {
+            gui::HardDiskCreator::Instance().Open();
+        }
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::Spacing();
+
         static constexpr MediaSlotDescriptor hd_desc{
             ICON_FA_HARD_DRIVE, "HD", "Select Hard Drive", "HardDrive",
             "Attach", "Detach",

@@ -101,6 +101,7 @@ target_sources(vAmigaImgui PRIVATE
     components/dashboard.cc
     components/disk_creator.cc
     components/disk_inspector.cc
+    components/hard_disk_creator.cc
     components/volume_inspector.cc
     components/file_picker.cc
     components/input_manager.cc
@@ -137,7 +138,14 @@ if(ENABLE_TESTS)
     add_executable(vAmigaTests
         tests/smoke_test.cc
         tests/config_provider_test.cc
+        tests/hard_disk_creator_test.cc
         services/config_provider.cc
+        components/hard_disk_creator.cc
+        ${imgui_SOURCE_DIR}/imgui.cpp
+        ${imgui_SOURCE_DIR}/imgui_demo.cpp
+        ${imgui_SOURCE_DIR}/imgui_draw.cpp
+        ${imgui_SOURCE_DIR}/imgui_tables.cpp
+        ${imgui_SOURCE_DIR}/imgui_widgets.cpp
     )
     set_target_properties(vAmigaTests PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
     target_link_libraries(vAmigaTests PRIVATE
@@ -146,6 +154,7 @@ if(ENABLE_TESTS)
     )
     target_include_directories(vAmigaTests PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}
+        ${imgui_SOURCE_DIR}
     )
     add_test(NAME vAmigaTests COMMAND vAmigaTests)
 endif()
