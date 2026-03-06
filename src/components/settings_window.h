@@ -33,6 +33,9 @@ struct SettingsContext {
   int* screenshot_source;
   int* port1_device;
   int* port2_device;
+  bool* mcp_enable;
+  int* mcp_port;
+  std::string* mcp_host;
   ::InputManager* input_manager;
   std::function<void(const std::filesystem::path&)> on_load_kickstart;
   std::function<void()> on_eject_kickstart;
@@ -62,6 +65,7 @@ class SettingsWindow {
   void DrawCaptures(vamiga::VAmiga& emulator, const SettingsContext& ctx);
   void DrawROMs(vamiga::VAmiga& emulator, const SettingsContext& ctx);
   void DrawHardware(vamiga::VAmiga& emulator);
+  void DrawMCP(const SettingsContext& ctx);
   void DrawPeripherals(vamiga::VAmiga& emulator, const SettingsContext& ctx);
   void DrawPerformance(vamiga::VAmiga& emulator);
   void DrawCompatibility(vamiga::VAmiga& emulator);

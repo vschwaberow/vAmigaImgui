@@ -42,6 +42,11 @@ ConfigProvider::ConfigProvider(vamiga::DefaultsAPI& defaults_api)
   defaults_.setFallback(std::string(ConfigKeys::kUiShowDashboard), "0");
   defaults_.setFallback(std::string(ConfigKeys::kUiShowConsole), "0");
   defaults_.setFallback(std::string(ConfigKeys::kUiShowKeyboard), "0");
+
+  defaults_.setFallback(std::string(ConfigKeys::kMcpEnable), "0");
+  defaults_.setFallback(std::string(ConfigKeys::kMcpPort), "8080");
+  defaults_.setFallback(std::string(ConfigKeys::kMcpHost), "127.0.0.1");
+
   defaults_.setFallback(std::string(ConfigKeys::kInputPort1), "1");
   defaults_.setFallback(std::string(ConfigKeys::kInputPort2), "2");
   defaults_.setFallback(std::string(ConfigKeys::kInputAutofire), "0");

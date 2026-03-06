@@ -51,3 +51,78 @@ cmake -B build -DCMAKE_BUILD_TYPE=Release \
 ```
 
 If you want tests on, also add `-DGTEST_DIR=/path/to/googletest`.
+
+## MCP Server Integration
+
+This port includes an embedded Model Context Protocol (MCP) server, allowing AI assistants (like Claude) to directly interact with the Amiga emulator (e.g., read screen states, memory dumps, and trigger emulator features).
+
+### Claude Desktop Configuration
+
+Claude Desktop expects an MCP server to communicate via standard input/output (`stdio`). Because `vAmigaImgui` is a graphical application that outputs console logs, you must use the provided Python bridge script to route the JSON-RPC traffic safely over TCP.
+
+1. Start `vAmigaImgui`.
+2. Press `F12` to open Settings, go to the **MCP Server** tab, check **Enable MCP TCP Server**, and ensure the Port is `8080`.
+3. Add the following to your `claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "vAmiga-MCP": {
+      "command": "python3",
+      "args": [
+        "/absolute/path/to/vAmigaImgui/scripts/mcp_stdio_bridge.py",
+        "127.0.0.1",
+        "8080"
+      ]
+    }
+  }
+}
+```
+
+*Note: Replace `/absolute/path/to/vAmigaImgui` with the actual path to your clone.*
+
+### Cursor / Codex Configuration
+
+In Cursor or other Codex-powered editor clients that support MCP, you can add the server directly via the editor's MCP settings:
+
+1. **Type:** `command` (or `stdio`)
+2. **Command:** `python3`
+3. **Arguments:** `/absolute/path/to/vAmigaImgui/scripts/mcp_stdio_bridge.py 127.0.0.1 8080`
+
+### Gemini CLI
+
+For the Gemini CLI tool, you can register the MCP server in your tools configuration file (often `mcp.json` or passed via command line). The structure is identical to the standard MCP definition:
+
+```json
+{
+  "mcpServers": {
+    "vAmiga-MCP": {
+      "command": "python3",
+      "args": [
+        "/absolute/path/to/vAmigaImgui/scripts/mcp_stdio_bridge.py",
+        "127.0.0.1",
+        "8080"
+      ]
+    }
+  }
+}
+```
+
+### OpenCode
+
+In OpenCode, configure the MCP tool integration by providing the Python bridge script as the executable tool source:
+
+```json
+{
+  "mcpServers": {
+    "vAmiga-MCP": {
+      "command": "python3",
+      "args": [
+        "/absolute/path/to/vAmigaImgui/scripts/mcp_stdio_bridge.py",
+        "127.0.0.1",
+        "8080"
+      ]
+    }
+  }
+}
+```

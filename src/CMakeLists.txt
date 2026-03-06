@@ -55,6 +55,12 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "Clang" OR CMAKE_CXX_COMPILER_ID MATCHES "GNU")
     target_compile_options(ImGuiFileDialog PRIVATE -Wno-deprecated-enum-enum-conversion)
 endif()
 
+FetchContent_Declare(json
+    GIT_REPOSITORY https://github.com/nlohmann/json.git
+    GIT_TAG v3.11.3
+)
+FetchContent_MakeAvailable(json)
+
 if(ENABLE_TESTS)
     set(GTEST_DIR "" CACHE PATH "Path to googletest source")
     if(GTEST_DIR STREQUAL "")
@@ -87,6 +93,7 @@ target_link_libraries(vAmigaImgui PRIVATE
     VACore
     ${SDL2_LIBRARIES}
     ImGuiFileDialog
+    nlohmann_json::nlohmann_json
 )
 
 target_include_directories(vAmigaImgui PRIVATE
@@ -111,6 +118,7 @@ target_sources(vAmigaImgui PRIVATE
     components/video_window.cc
     components/virtual_keyboard.cc
     services/config_provider.cc
+    services/mcp_server.cc
     ${imgui_SOURCE_DIR}/imgui.cpp
     ${imgui_SOURCE_DIR}/imgui_demo.cpp
     ${imgui_SOURCE_DIR}/imgui_draw.cpp
@@ -139,6 +147,8 @@ if(ENABLE_TESTS)
         tests/smoke_test.cc
         tests/config_provider_test.cc
         tests/hard_disk_creator_test.cc
+        tests/mcp_server_test.cc
+        services/mcp_server.cc
         services/config_provider.cc
         components/hard_disk_creator.cc
         components/file_picker.cc
@@ -153,6 +163,7 @@ if(ENABLE_TESTS)
         gtest_main
         VACore
         ImGuiFileDialog
+        nlohmann_json::nlohmann_json
     )
     target_include_directories(vAmigaTests PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}
