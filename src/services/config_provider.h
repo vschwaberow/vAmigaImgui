@@ -57,6 +57,10 @@ struct ConfigKeys {
   static constexpr std::string_view kSnapAutoDelete  = "Snapshot.AutoDelete";
   static constexpr std::string_view kScrnFormat      = "Screenshot.Format";
   static constexpr std::string_view kScrnSource      = "Screenshot.Source";
+
+  static constexpr std::string_view kMcpEnable       = "Mcp.Enable";
+  static constexpr std::string_view kMcpPort         = "Mcp.Port";
+  static constexpr std::string_view kMcpHost         = "Mcp.Host";
 };
 class ConfigProvider {
  public:

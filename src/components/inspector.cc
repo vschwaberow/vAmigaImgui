@@ -142,12 +142,11 @@ void Inspector::DrawToolbar(vamiga::VAmiga& emu, WindowState& state) {
   int preset_idx = -1;
   if (ImGui::Combo(
           "Preset", &preset_idx,
-          [](void* data, int idx, const char** out_text) {
+          [](void* data, int idx) -> const char* {
             auto* arr = static_cast<const TabDescriptor*>(data);
             auto count = static_cast<int>(Inspector::kTabDescriptors.size());
-            if (idx < 0 || idx >= count) return false;
-            *out_text = arr[idx].label.data();
-            return true;
+            if (idx < 0 || idx >= count) return nullptr;
+            return arr[idx].label.data();
           },
           const_cast<TabDescriptor*>(Inspector::kTabDescriptors.data()),
           static_cast<int>(Inspector::kTabDescriptors.size()))) {

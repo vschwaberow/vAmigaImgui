@@ -137,6 +137,11 @@ void SettingsWindow::DrawSidebar() {
   if (ImGui::Selectable(ICON_FA_PUZZLE_PIECE " Compatibility", current_tab_ == 7)) current_tab_ = 7;
   if (ImGui::Selectable(ICON_FA_VOLUME_HIGH " Audio", current_tab_ == 8)) current_tab_ = 8;
   if (ImGui::Selectable(ICON_FA_EYE " Video", current_tab_ == 9)) current_tab_ = 9;
+  ImGui::Spacing();
+  ImGui::Separator();
+  ImGui::Spacing();
+  ImGui::TextDisabled("INTEGRATIONS");
+  if (ImGui::Selectable(ICON_FA_NETWORK_WIRED " MCP Server", current_tab_ == 10)) current_tab_ = 10;
 }
 void SettingsWindow::DrawContent(vamiga::VAmiga& emulator, const SettingsContext& ctx) {
   ImGui::BeginChild("ContentRegion", ImVec2(0, 0), false, 0);
@@ -151,6 +156,7 @@ void SettingsWindow::DrawContent(vamiga::VAmiga& emulator, const SettingsContext
     case 7: DrawCompatibility(emulator); break;
     case 8: DrawAudio(emulator, ctx); break;
     case 9: DrawVideo(emulator); break;
+    case 10: DrawMCP(ctx); break;
   }
   ImGui::EndChild();
 }
@@ -502,6 +508,49 @@ void SettingsWindow::DrawCompatibility(vamiga::VAmiga& emulator) {
   if (ImGui::Checkbox("Playfield-Playfield", &plf_plf)) {
       emulator.set(vamiga::Opt::DENISE_CLX_PLF_PLF, plf_plf);
   }
+}
+
+void SettingsWindow::DrawMCP(const SettingsContext& ctx) {
+    ImGui::Text("Model Context Protocol (MCP) Server");
+    ImGui::Separator();
+    ImGui::Spacing();
+
+    if (ctx.mcp_enable) {
+        bool enabled = *ctx.mcp_enable;
+        if (ImGui::Checkbox("Enable MCP TCP Server", &enabled)) {
+            *ctx.mcp_enable = enabled;
+            if (ctx.on_save_config) ctx.on_save_config();
+        }
+        ImGui::TextDisabled("Allows LLMs and AI Agents to inspect and control the emulator.");
+    }
+
+    ImGui::Spacing();
+
+    if (ctx.mcp_port) {
+        int port = *ctx.mcp_port;
+        if (ImGui::InputInt("Server Port", &port)) {
+            if (port < 1024) port = 1024;
+            if (port > 65535) port = 65535;
+            *ctx.mcp_port = port;
+        }
+        if (ImGui::IsItemDeactivatedAfterEdit() && ctx.on_save_config) {
+            ctx.on_save_config();
+        }
+    }
+    
+    if (ctx.mcp_host) {
+        char buf[256];
+        strncpy(buf, ctx.mcp_host->c_str(), sizeof(buf));
+        buf[sizeof(buf) - 1] = '\0';
+        if (ImGui::InputText("Listen Host IP", buf, sizeof(buf))) {
+            *ctx.mcp_host = buf;
+        }
+        if (ImGui::IsItemDeactivatedAfterEdit() && ctx.on_save_config) {
+            ctx.on_save_config();
+        }
+        ImGui::TextDisabled("Changes to the port, host or enable state require a restart of the MCP server,\n"
+                            "which happens automatically when you change these settings.");
+    }
 }
 
 void SettingsWindow::DrawCaptures(vamiga::VAmiga& emulator, const SettingsContext& ctx) {

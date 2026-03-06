@@ -155,6 +155,8 @@ void Application::InitEmulator() {
     emulator_.retroShell.press(cmd);
     emulator_.retroShell.press(vamiga::RSKey::RETURN, false);
   });
+  
+  mcp_server_ = std::make_unique<gui::McpServer>(emulator_);
 }
 void Application::LoadConfig() {
   config_->Load();
@@ -239,6 +241,13 @@ void Application::LoadConfig() {
   snapshot_auto_delete_ = config_->GetBool(gui::ConfigKeys::kSnapAutoDelete, gui::Defaults::kSnapshotAutoDelete);
   screenshot_format_ = config_->GetInt(gui::ConfigKeys::kScrnFormat, gui::Defaults::kScreenshotFormat);
   screenshot_source_ = config_->GetInt(gui::ConfigKeys::kScrnSource, gui::Defaults::kScreenshotSource);
+
+  mcp_enable_ = config_->GetBool(gui::ConfigKeys::kMcpEnable, false);
+  mcp_port_ = config_->GetInt(gui::ConfigKeys::kMcpPort, 8080);
+  mcp_host_ = config_->GetString(gui::ConfigKeys::kMcpHost, "127.0.0.1");
+  if (mcp_enable_) {
+      mcp_server_->Start(mcp_host_, mcp_port_);
+  }
 }
 void Application::SaveConfig() {
   config_->SetBool(gui::ConfigKeys::kPauseBg,
@@ -288,10 +297,21 @@ void Application::SaveConfig() {
   config_->SetInt(gui::ConfigKeys::kAudSampleMethod, static_cast<int>(emulator_.get(vamiga::Opt::AUD_SAMPLING_METHOD)));
   config_->SetInt(gui::ConfigKeys::kAudBufferSize, static_cast<int>(emulator_.get(vamiga::Opt::AUD_BUFFER_SIZE)));
   config_->SetInt(gui::ConfigKeys::kAudioVolume, static_cast<int>(emulator_.get(vamiga::Opt::AUD_VOLL)));
+  
+  config_->SetBool(gui::ConfigKeys::kMcpEnable, mcp_enable_);
+  config_->SetInt(gui::ConfigKeys::kMcpPort, mcp_port_);
+  config_->SetString(gui::ConfigKeys::kMcpHost, mcp_host_);
+  
   int pan0 = static_cast<int>(emulator_.get(vamiga::Opt::AUD_PAN0));
   int separation = (50 - pan0) * 2;
   config_->SetInt(gui::ConfigKeys::kAudioSep, separation);
   config_->Save();
+  
+  if (mcp_enable_) {
+      mcp_server_->Start(mcp_host_, mcp_port_);
+  } else {
+      mcp_server_->Stop();
+  }
 }
 void Application::Run() {
   if (!Init()) return;
@@ -521,6 +541,9 @@ void Application::DrawGUI() {
     ctx.screenshot_source = &screenshot_source_;
     ctx.port1_device = &port1_device_;
     ctx.port2_device = &port2_device_;
+    ctx.mcp_enable = &mcp_enable_;
+    ctx.mcp_port = &mcp_port_;
+    ctx.mcp_host = &mcp_host_;
     ctx.input_manager = input_manager_.get();
     ctx.on_load_kickstart = [this](auto p) { LoadKickstart(p); };
     ctx.on_eject_kickstart = [this]() { EjectKickstart(); };

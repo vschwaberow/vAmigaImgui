@@ -10,6 +10,7 @@
 #include "VAmiga.h"
 #include "components/input_manager.h"
 #include "services/config_provider.h"
+#include "services/mcp_server.h"
 struct SDLWindowDeleter {
   void operator()(SDL_Window* w) const {
     if (w) SDL_DestroyWindow(w);
@@ -64,6 +65,10 @@ class Application {
   vamiga::VAmiga emulator_;
   std::unique_ptr<InputManager> input_manager_;
   std::unique_ptr<gui::ConfigProvider> config_;
+  std::unique_ptr<gui::McpServer> mcp_server_;
+  bool mcp_enable_ {false};
+  int mcp_port_ {8080};
+  std::string mcp_host_ {"127.0.0.1"};
   bool show_settings_ = false;
   bool show_inspector_ = false;
   bool show_dashboard_ = false;
